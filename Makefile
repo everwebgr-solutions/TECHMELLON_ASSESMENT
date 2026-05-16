@@ -26,7 +26,7 @@ start: ui-build
 	 wait
 
 seed:
-	python -m api.seed
+	python3 -m api.seed
 
 migrate:
 	python3 -m alembic upgrade head
@@ -41,13 +41,13 @@ loop:
 	python3 -m refinement.loop
 
 setup-agent:
-	python -m elevenlabs_client.setup
+	python3 -m elevenlabs_client.setup
 
 lint:
-	python -m py_compile api/services/booking_service.py \
-	                     api/services/flight_service.py \
-	                     api/routes/webhooks.py \
-	                     knowledge_base/kb_service.py
+	python3 -m py_compile api/services/booking_service.py \
+	                      api/services/flight_service.py \
+	                      api/routes/webhooks.py \
+	                      knowledge_base/kb_service.py
 	@echo "Syntax OK"
 
 clean:
