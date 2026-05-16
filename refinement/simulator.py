@@ -11,6 +11,10 @@ from __future__ import annotations
 import time
 from typing import Any, Callable, Dict, List, Optional
 
+# Delay between emitting turns so the UI shows messages one-by-one
+# rather than all at once (the ElevenLabs API returns the full transcript in one call)
+_TURN_EMIT_DELAY = 0.4
+
 from config import MAX_CONVERSATION_TURNS
 from elevenlabs_client.chat import simulate_full_conversation
 from refinement.scenarios import Scenario
@@ -76,5 +80,6 @@ def simulate_conversation(
         transcript.append(entry)
         if on_turn:
             on_turn(role, message)
+            time.sleep(_TURN_EMIT_DELAY)
 
     return transcript
