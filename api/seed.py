@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 from itertools import product
 
 from api.db import Base, SessionLocal, engine
+from api.models.booking import Booking
 from api.models.flight import Flight
 
 DESTINATIONS = [
@@ -119,8 +120,38 @@ def seed(drop_existing: bool = False) -> None:
 
         flights = generate_flights(days=7)
         session.add_all(flights)
+        session.flush()  # assign IDs before we reference them
+
+        # Hardcoded booking used by reschedule / cancel / add-extras scenarios.
+        # Pick the first economy flight to Paris (CDG) that departs tomorrow.
+        tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0, tzinfo=None
+        )
+        anchor_flight = next(
+            (
+                f for f in flights
+                if "CDG" in f.destination
+                and f.seat_class == "economy"
+                and f.departure_dt >= tomorrow
+            ),
+            flights[0],  # fallback: first seeded flight
+        )
+        seed_booking = Booking(
+            reference="BK-SKY001",
+            flight_id=anchor_flight.id,
+            passenger_name="Alex Johnson",
+            passenger_email="alex.j@email.com",
+            seat_preference="window",
+            seat_class=anchor_flight.seat_class,
+            status="confirmed",
+            total_price_gbp=anchor_flight.price_gbp,
+        )
+        seed_booking.extras = {}
+        session.add(seed_booking)
+
         session.commit()
         print(f"Seeded {len(flights)} flights across 7 days, 6 destinations, 3 classes.")
+        print(f"Seeded hardcoded booking BK-SKY001 → flight {anchor_flight.flight_number} to {anchor_flight.destination}.")
 
 
 if __name__ == "__main__":
