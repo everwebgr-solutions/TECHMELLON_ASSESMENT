@@ -44,7 +44,7 @@ export default function App() {
       setIterations([])
       setConvItems([])
       setCurrentIteration(null)
-      setActivity(null)
+      // Keep activity at 'initializing' until iteration_started sets it to 'simulating'
     }
 
     if (type === 'loop_complete') {

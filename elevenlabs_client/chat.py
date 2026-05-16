@@ -91,6 +91,7 @@ class ChatSession:
             "type": "conversation_initiation_client_data",
             "conversation_config_override": {
                 "tts": {"optimize_streaming_latency": 4},
+                "conversation": {"text_only": True},
             },
         }))
 
