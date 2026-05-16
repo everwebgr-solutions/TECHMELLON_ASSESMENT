@@ -142,11 +142,18 @@ def run_loop(
         logger.info("[%s] %s", event_type, payload.get("message", ""))
 
     def _push_prompt(base_prompt: str) -> None:
-        """Add today's date header and push the prompt to the existing agent."""
+        """Add today's date header, push to ElevenLabs, and persist base prompt to disk."""
         from datetime import datetime as _dt
+        from config import DATA_DIR
         today_str = _dt.utcnow().strftime("%Y-%m-%d")
         dated = f"Today's date is {today_str} (UTC). Use this to interpret relative dates like 'today', 'tomorrow', 'next week'.\n\n{base_prompt}"
         update_agent_prompt(agent_id, dated)
+        # Write the base prompt (without the date header) so git diff shows
+        # exactly what the loop changed after each iteration.
+        try:
+            (DATA_DIR / "evolved_prompt.txt").write_text(base_prompt)
+        except Exception:
+            pass
 
     # Fetch the current base prompt from ElevenLabs (source of truth).
     # Strip any previously injected date header so we don't accumulate them.
@@ -160,13 +167,33 @@ def run_loop(
             .get("prompt", {})
             .get("prompt", current_prompt)
         )
-        # Remove injected date header from previous runs before storing as base prompt.
-        current_prompt = _re.sub(
+        # Remove injected date header from previous runs.
+        fetched = _re.sub(
             r"^Today's date is \d{4}-\d{2}-\d{2} \(UTC\)\. Use this.*?\n\n",
             "",
             fetched,
             flags=_re.DOTALL,
         )
+        # Extract any typed fix blocks accumulated in previous runs so they can
+        # be grafted onto the new structured baseline (preserving refinements).
+        typed_fix_blocks = _re.findall(
+            r"\n+## Behaviour Fixes: \w+.*?(?=\n+## Behaviour Fixes:|\Z)",
+            fetched,
+            flags=_re.DOTALL,
+        )
+        # If the fetched prompt lacks the new section structure, reset to the
+        # current baseline and reattach any valid typed fix blocks.
+        if "## Booking" not in fetched:
+            logger.info(
+                "[AGENT] Fetched prompt missing sectioned structure — rebuilding "
+                "from current baseline and reattaching %d typed fix block(s)",
+                len(typed_fix_blocks),
+            )
+            current_prompt = get_initial_prompt().rstrip()
+            for block in typed_fix_blocks:
+                current_prompt += block
+        else:
+            current_prompt = fetched
     except Exception as exc:
         raise RuntimeError(
             f"Could not fetch agent {agent_id} from ElevenLabs: {exc}\n"
@@ -292,11 +319,13 @@ def run_loop(
             "overall_pass": evaluation.overall_pass,
             "summary": evaluation.summary,
             "tool_calls": tool_calls,
+            "conversation_type": evaluation.conversation_type,
         })
 
         # ── Regression check: roll back previous iteration's fixes ─────────────
         rolled_back = False
-        if prev_average is not None and avg < prev_average:
+        has_unreversed_changes = (current_prompt != checkpoint_prompt) or bool(checkpoint_patches)
+        if prev_average is not None and avg < prev_average and has_unreversed_changes:
             logger.warning(
                 "[ROLLBACK] Score regressed %.1f → %.1f — reverting previous fixes",
                 prev_average, avg,
@@ -327,9 +356,12 @@ def run_loop(
                 "current_average": avg,
             })
 
-            # Reset baseline to the pre-fix score so the next iteration is compared
-            # against the restored state, not the (now-invalid) improved score.
-            prev_average = checkpoint_score
+            # Use the regression score as the new baseline — the checkpoint state has
+            # been restored, so the next iteration must beat the current (regressed)
+            # score, not the pre-fix score. Using checkpoint_score here would re-trigger
+            # rollback on every subsequent iteration that doesn't beat the original
+            # score even though there is nothing left to revert.
+            prev_average = avg
             checkpoint_patches = []  # patches already reversed — clear to avoid double-rollback
 
             state.record_iteration(
@@ -390,8 +422,9 @@ def run_loop(
 
         # Prompt fix
         if prompt_failures:
-            logger.info("[FIX] Rewriting prompt for %d prompt failures", len(prompt_failures))
-            new_prompt = rewrite_prompt(current_prompt, prompt_failures)
+            conversation_type = getattr(evaluation, "conversation_type", "booking")
+            logger.info("[FIX] Rewriting %s prompt section for %d prompt failures", conversation_type, len(prompt_failures))
+            new_prompt = rewrite_prompt(current_prompt, prompt_failures, conversation_type=conversation_type)
 
             if new_prompt != current_prompt:
                 prompt_diff = compute_diff(current_prompt, new_prompt)
