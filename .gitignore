@@ -23,13 +23,6 @@ data/airline.db
 data/airline.db-shm
 data/airline.db-wal
 
-# Logs (keep structure, ignore generated logs)
-logs/run_*.json
-logs/*.jsonl
-
-# Patches backup
-data/patches/backup/
-
 # IDE
 .vscode/
 .idea/
