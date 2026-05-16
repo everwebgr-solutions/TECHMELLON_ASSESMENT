@@ -59,18 +59,38 @@ def with_retry(
 ) -> Any:
     """
     Retry fn(*args, **kwargs) up to max_attempts times.
-    On structured output parse failure the error is appended to the message list.
-    On network errors exponential backoff is applied.
+
+    On structured output parse failure (ValueError) the error is appended to
+    the message list so the model sees what it did wrong and can self-correct.
+    On network/provider errors exponential backoff is applied instead.
     """
     last_exc: Optional[Exception] = None
+
+    # Work on a local copy of messages so we can append feedback without
+    # mutating the caller's list.
+    args = list(args)
+    if args and isinstance(args[0], list):
+        args[0] = list(args[0])
+
     for attempt in range(1, max_attempts + 1):
         try:
             return fn(*args, **kwargs)
-        except (LLMProviderError, ValueError) as exc:
+        except ValueError as exc:
+            # Structured output parse failure — tell the model what went wrong.
             last_exc = exc
-            if attempt < max_attempts:
-                time.sleep(base_delay * (2 ** (attempt - 1)))
-        except Exception as exc:
+            if attempt < max_attempts and args and isinstance(args[0], list):
+                args[0].append({"role": "assistant", "content": "(invalid JSON — parse failed)"})
+                args[0].append({
+                    "role": "user",
+                    "content": (
+                        f"Your previous response could not be parsed as valid JSON. "
+                        f"Error: {exc}. "
+                        f"Respond ONLY with a valid JSON object matching the required schema. "
+                        f"No markdown, no explanation, no code fences."
+                    ),
+                })
+                time.sleep(base_delay)
+        except (LLMProviderError, Exception) as exc:
             last_exc = exc
             if attempt < max_attempts:
                 time.sleep(base_delay * (2 ** (attempt - 1)))

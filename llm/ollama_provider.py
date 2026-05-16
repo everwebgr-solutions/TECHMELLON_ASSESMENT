@@ -43,19 +43,19 @@ def _build_example(schema: Type[BaseModel]) -> Dict[str, Any]:
                 "score": 7,
                 "failure_quotes": ["Agent asked for destination twice without searching"],
                 "root_cause": "prompt",
-                "root_cause_detail": "Agent did not call search_flights after getting destination"
+                "root_cause_detail": "Agent repeatedly asked for the destination instead of calling search_flights. This is an instruction-following failure."
             },
             "api_correctness": {
-                "score": 5,
-                "failure_quotes": ["No booking was made despite customer agreeing to proceed"],
+                "score": 4,
+                "failure_quotes": ["I'm sorry, I wasn't able to complete your booking due to a system error"],
                 "root_cause": "code",
-                "root_cause_detail": "book_flight tool was not called"
+                "root_cause_detail": "FILE: api/routes/webhooks.py::webhook_book_flight\nThe book_flight webhook returned an error despite being called with valid parameters. The agent correctly attempted the booking but the backend rejected it."
             },
             "outcome_confirmation": {
                 "score": 6,
                 "failure_quotes": ["Booking reference was never provided to the customer"],
                 "root_cause": "prompt",
-                "root_cause_detail": "Agent ended call without confirming booking reference"
+                "root_cause_detail": "Agent ended the call without reading out the booking reference. The system prompt requires confirming the reference number clearly."
             },
             "naturalness": {
                 "score": 8,
@@ -64,7 +64,7 @@ def _build_example(schema: Type[BaseModel]) -> Dict[str, Any]:
                 "root_cause_detail": ""
             },
             "overall_pass": False,
-            "summary": "Agent understood the request but failed to complete the booking and confirm the reference."
+            "summary": "Agent understood the request but the booking failed due to a backend error, and the agent did not confirm the reference."
         }
     # Generic fallback
     return {"error": "unknown schema"}
