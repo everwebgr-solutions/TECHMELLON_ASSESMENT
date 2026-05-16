@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sky Airways — Refinement Loop Observer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2a2d3a;
+      --accent: #4f8ef7;
+      --accent2: #7c5cfc;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --agent: #4f8ef7;
+      --user: #7c5cfc;
+      --mono: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+    }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; }
+
+    /* Header */
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; gap: 16px; }
+    header h1 { font-size: 16px; font-weight: 600; color: var(--text); }
+    .status-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 10px; border-radius: 20px; font-weight: 500; }
+    .status-badge.idle    { background: #1e293b; color: var(--muted); }
+    .status-badge.running { background: #052e16; color: var(--green); }
+    .status-badge.done    { background: #1e1b4b; color: #818cf8; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .running .dot { animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .iter-badge { margin-left: auto; font-size: 12px; color: var(--muted); }
+    #start-btn { margin-left: 8px; background: var(--accent); color: white; border: none; padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; }
+    #start-btn:hover { opacity: 0.88; }
+    #start-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Layout */
+    .layout { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; gap: 1px; background: var(--border); height: calc(100vh - 53px); }
+    .panel { background: var(--bg); overflow: hidden; display: flex; flex-direction: column; }
+    .panel-header { background: var(--surface); padding: 10px 16px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .panel-body { flex: 1; overflow-y: auto; padding: 16px; }
+
+    /* Conversation */
+    .message { margin-bottom: 12px; }
+    .msg-role { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 3px; }
+    .msg-role.agent { color: var(--agent); }
+    .msg-role.user  { color: var(--user); }
+    .msg-body { background: var(--surface); border-radius: 8px; padding: 10px 12px; font-size: 13px; line-height: 1.55; border: 1px solid var(--border); }
+
+    /* Scores */
+    .score-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; }
+    .score-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+    .score-label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 4px; }
+    .score-value { font-size: 26px; font-weight: 700; font-family: var(--mono); }
+    .score-value.pass { color: var(--green); }
+    .score-value.warn { color: var(--yellow); }
+    .score-value.fail { color: var(--red); }
+    .scenario-pill { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 12px; margin-bottom: 14px; color: var(--muted); }
+    .scenario-pill span { color: var(--text); font-weight: 500; }
+    .summary-text { font-size: 12px; color: var(--muted); font-style: italic; margin-top: 8px; }
+
+    /* Iteration history */
+    .iter-row { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+    .iter-row-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .iter-num { font-size: 11px; font-weight: 700; color: var(--muted); }
+    .iter-scenario { font-size: 12px; font-weight: 500; }
+    .iter-avg { margin-left: auto; font-family: var(--mono); font-size: 13px; font-weight: 700; }
+    .mini-scores { display: flex; gap: 6px; flex-wrap: wrap; }
+    .mini-score { font-size: 11px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 2px 7px; font-family: var(--mono); }
+    .mini-score.pass { border-color: #166534; color: var(--green); }
+    .mini-score.warn { border-color: #78350f; color: var(--yellow); }
+    .mini-score.fail { border-color: #7f1d1d; color: var(--red); }
+    .pass-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+    .pass-badge.pass { background: #052e16; color: var(--green); }
+    .pass-badge.fail { background: #450a0a; color: var(--red); }
+
+    /* Diff panel */
+    .diff-block { font-family: var(--mono); font-size: 12px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+    .diff-add { color: var(--green); background: rgba(34,197,94,.07); display: block; }
+    .diff-del { color: var(--red); background: rgba(239,68,68,.07); display: block; text-decoration: line-through; }
+    .diff-hdr { color: var(--muted); display: block; }
+
+    /* Patch history */
+    .patch-item { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; font-size: 12px; }
+    .patch-path { font-family: var(--mono); color: var(--accent); }
+    .patch-status { margin-top: 4px; font-size: 11px; color: var(--muted); }
+    .patch-status.ok { color: var(--green); }
+    .patch-status.err { color: var(--red); }
+
+    /* Empty states */
+    .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 40px 20px; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>✈ Sky Airways — Refinement Loop Observer</h1>
+  <span class="status-badge idle" id="status-badge">
+    <span class="dot"></span>
+    <span id="status-text">Idle</span>
+  </span>
+  <span class="iter-badge" id="iter-badge">—</span>
+  <button id="start-btn" onclick="startLoop()">▶ Start Loop</button>
+</header>
+
+<div class="layout">
+
+  <!-- Panel 1: Live Conversation -->
+  <div class="panel">
+    <div class="panel-header">Live Conversation</div>
+    <div class="panel-body" id="conversation-panel">
+      <div class="empty">Waiting for loop to start…</div>
+    </div>
+  </div>
+
+  <!-- Panel 2: Current Evaluation Scores -->
+  <div class="panel">
+    <div class="panel-header">Current Evaluation</div>
+    <div class="panel-body" id="scores-panel">
+      <div class="empty">No evaluation yet.</div>
+    </div>
+  </div>
+
+  <!-- Panel 3: Prompt Diff -->
+  <div class="panel">
+    <div class="panel-header">Prompt Changes &amp; Patch History</div>
+    <div class="panel-body" id="diff-panel">
+      <div class="empty">No changes yet.</div>
+    </div>
+  </div>
+
+  <!-- Panel 4: Iteration History -->
+  <div class="panel">
+    <div class="panel-header">Iteration History</div>
+    <div class="panel-body" id="history-panel">
+      <div class="empty">No iterations yet.</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const convPanel   = document.getElementById('conversation-panel');
+  const scoresPanel = document.getElementById('scores-panel');
+  const diffPanel   = document.getElementById('diff-panel');
+  const histPanel   = document.getElementById('history-panel');
+  const statusBadge = document.getElementById('status-badge');
+  const statusText  = document.getElementById('status-text');
+  const iterBadge   = document.getElementById('iter-badge');
+  const startBtn    = document.getElementById('start-btn');
+
+  let currentIteration = 0;
+  let iterationHistory = {};
+  let diffContent = '';
+
+  // ── SSE connection ──────────────────────────────────────────────────────────
+
+  const es = new EventSource('/events');
+
+  es.onmessage = (e) => {
+    const event = JSON.parse(e.data);
+    handleEvent(event);
+  };
+
+  es.onerror = () => {
+    setStatus('idle');
+  };
+
+  // ── Event handlers ──────────────────────────────────────────────────────────
+
+  function handleEvent(ev) {
+    switch (ev.type) {
+      case 'loop_started':
+        setStatus('running');
+        startBtn.disabled = true;
+        convPanel.innerHTML = '';
+        break;
+
+      case 'iteration_started':
+        currentIteration = ev.iteration;
+        iterBadge.textContent = `Iteration ${ev.iteration} / ${ev.max_iterations || '?'}`;
+        if (!iterationHistory[ev.iteration]) {
+          iterationHistory[ev.iteration] = { scenario: ev.scenario_description, turns: [], scores: null, pass: null };
+        }
+        appendIterationRow(ev.iteration, ev.scenario_description, null, null);
+        break;
+
+      case 'conversation_turn':
+        appendConversationTurn(ev.role, ev.content);
+        if (iterationHistory[ev.iteration]) {
+          iterationHistory[ev.iteration].turns.push({ role: ev.role, content: ev.content });
+        }
+        break;
+
+      case 'evaluation_complete':
+        renderScores(ev.scores, ev.average, ev.overall_pass, ev.summary, ev.iteration);
+        updateIterationRow(ev.iteration, ev.scores, ev.average, ev.overall_pass);
+        break;
+
+      case 'prompt_updated':
+        appendDiff(ev.diff, ev.iteration);
+        break;
+
+      case 'code_patched':
+        appendPatch(ev.file, ev.function, ev.success, ev.reason, ev.iteration);
+        break;
+
+      case 'loop_complete':
+        setStatus('done', ev.reason === 'all_passing' ? 'All Passing ✓' : 'Max Iterations');
+        startBtn.disabled = false;
+        break;
+
+      case 'error':
+        console.error('Loop error:', ev.message);
+        break;
+    }
+  }
+
+  // ── Render helpers ──────────────────────────────────────────────────────────
+
+  function setStatus(state, label) {
+    statusBadge.className = 'status-badge ' + state;
+    statusText.textContent = label || { idle: 'Idle', running: 'Running…', done: 'Done' }[state];
+  }
+
+  function appendConversationTurn(role, content) {
+    const roleLabel = role === 'agent' ? 'Sky (Agent)' : 'Customer';
+    const el = document.createElement('div');
+    el.className = 'message';
+    el.innerHTML = `
+      <div class="msg-role ${role}">${roleLabel}</div>
+      <div class="msg-body">${escHtml(content)}</div>
+    `;
+    convPanel.appendChild(el);
+    convPanel.scrollTop = convPanel.scrollHeight;
+  }
+
+  function renderScores(scores, avg, pass, summary, iteration) {
+    if (!scores) return;
+    const criteria = ['understanding', 'api_correctness', 'outcome_confirmation', 'naturalness'];
+    const labels   = ['Understanding', 'API Correctness', 'Outcome Confirmation', 'Naturalness'];
+    let html = `<div class="scenario-pill">Iteration ${iteration} — avg <span>${avg ? avg.toFixed(1) : '—'}</span></div>`;
+    html += '<div class="score-grid">';
+    criteria.forEach((k, i) => {
+      const v = scores[k] ?? '—';
+      const cls = v >= 8 ? 'pass' : v >= 6 ? 'warn' : 'fail';
+      html += `<div class="score-card">
+        <div class="score-label">${labels[i]}</div>
+        <div class="score-value ${cls}">${v}<span style="font-size:14px;color:var(--muted)">/10</span></div>
+      </div>`;
+    });
+    html += '</div>';
+    if (summary) html += `<div class="summary-text">${escHtml(summary)}</div>`;
+    scoresPanel.innerHTML = html;
+  }
+
+  const _iterRows = {};
+
+  function appendIterationRow(iter, scenario, scores, pass) {
+    const id = `iter-row-${iter}`;
+    if (document.getElementById(id)) return;
+    if (histPanel.querySelector('.empty')) histPanel.innerHTML = '';
+    const row = document.createElement('div');
+    row.className = 'iter-row';
+    row.id = id;
+    row.innerHTML = _iterRowHtml(iter, scenario, scores, null, pass);
+    histPanel.prepend(row);
+  }
+
+  function updateIterationRow(iter, scores, avg, pass) {
+    const row = document.getElementById(`iter-row-${iter}`);
+    if (!row) return;
+    const scenario = iterationHistory[iter]?.scenario || '';
+    row.innerHTML = _iterRowHtml(iter, scenario, scores, avg, pass);
+  }
+
+  function _iterRowHtml(iter, scenario, scores, avg, pass) {
+    const passHtml = pass === null ? '' :
+      `<span class="pass-badge ${pass ? 'pass' : 'fail'}">${pass ? 'PASS' : 'FAIL'}</span>`;
+    const avgHtml = avg != null ? `<span class="iter-avg ${avg >= 8 ? 'pass' : avg >= 6 ? 'warn' : 'fail'}" style="color:${avg >= 8 ? 'var(--green)' : avg >= 6 ? 'var(--yellow)' : 'var(--red)'}">${avg.toFixed(1)}</span>` : '';
+    let miniHtml = '';
+    if (scores) {
+      miniHtml = '<div class="mini-scores">';
+      Object.entries(scores).forEach(([k, v]) => {
+        const cls = v >= 8 ? 'pass' : v >= 6 ? 'warn' : 'fail';
+        miniHtml += `<span class="mini-score ${cls}" title="${k}">${v}</span>`;
+      });
+      miniHtml += '</div>';
+    } else {
+      miniHtml = '<span style="color:var(--muted);font-size:11px">Evaluating…</span>';
+    }
+    return `
+      <div class="iter-row-header">
+        <span class="iter-num">Iter ${iter}</span>
+        <span class="iter-scenario">${escHtml(scenario || '…')}</span>
+        ${avgHtml}
+        ${passHtml}
+      </div>
+      ${miniHtml}
+    `;
+  }
+
+  function appendDiff(diff, iteration) {
+    if (!diff) return;
+    if (diffPanel.querySelector('.empty')) diffPanel.innerHTML = '';
+
+    const header = document.createElement('div');
+    header.style.cssText = 'font-size:11px;color:var(--muted);margin-bottom:6px;margin-top:12px;text-transform:uppercase;letter-spacing:.06em;';
+    header.textContent = `Prompt diff — Iteration ${iteration}`;
+    diffPanel.prepend(header);
+
+    const block = document.createElement('div');
+    block.className = 'diff-block';
+    const lines = diff.split('\n');
+    lines.forEach(line => {
+      const span = document.createElement('span');
+      if (line.startsWith('+') && !line.startsWith('+++')) {
+        span.className = 'diff-add';
+      } else if (line.startsWith('-') && !line.startsWith('---')) {
+        span.className = 'diff-del';
+      } else if (line.startsWith('@@')) {
+        span.className = 'diff-hdr';
+      }
+      span.textContent = line;
+      block.appendChild(span);
+    });
+    diffPanel.prepend(block);
+  }
+
+  function appendPatch(file, fn, success, reason, iteration) {
+    if (diffPanel.querySelector('.empty')) diffPanel.innerHTML = '';
+    const el = document.createElement('div');
+    el.className = 'patch-item';
+    el.innerHTML = `
+      <div><span class="patch-path">${escHtml(file)}::${escHtml(fn)}</span> <span style="color:var(--muted);font-size:11px">iter ${iteration}</span></div>
+      <div class="patch-status ${success ? 'ok' : 'err'}">${success ? '✓' : '✗'} ${escHtml(reason || '')}</div>
+    `;
+    diffPanel.prepend(el);
+  }
+
+  function escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Start loop ──────────────────────────────────────────────────────────────
+
+  async function startLoop() {
+    startBtn.disabled = true;
+    try {
+      const resp = await fetch('/start', { method: 'POST' });
+      const data = await resp.json();
+      if (!resp.ok) {
+        alert(data.error || 'Failed to start loop');
+        startBtn.disabled = false;
+      }
+    } catch (e) {
+      alert('Could not connect to UI server');
+      startBtn.disabled = false;
+    }
+  }
+
+  // Fetch status on load
+  fetch('/status').then(r => r.json()).then(d => {
+    if (d.loop_running) {
+      setStatus('running');
+      startBtn.disabled = true;
+    }
+  }).catch(() => {});
+</script>
+</body>
+</html>

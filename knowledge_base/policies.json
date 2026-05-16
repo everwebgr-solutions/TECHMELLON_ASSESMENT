@@ -1,0 +1,185 @@
+{
+  "pet_policy": {
+    "summary": "Pets are permitted on Sky Airways flights subject to the following conditions.",
+    "cabin_pets": {
+      "permitted": true,
+      "species": ["domestic cats", "domestic dogs"],
+      "max_weight_kg": 8,
+      "carrier_dimensions_cm": "max 45 x 35 x 25 (length x width x height)",
+      "carrier_must_fit_under_seat": true,
+      "max_per_cabin": 4,
+      "fee_gbp": 50,
+      "booking_required_in_advance_hours": 48,
+      "notes": "The pet and carrier combined must not exceed 8 kg. The carrier must be well-ventilated and leak-proof. Pets must remain in carrier for the entire flight."
+    },
+    "hold_pets": {
+      "permitted": true,
+      "species": ["domestic cats", "domestic dogs", "small birds", "rabbits"],
+      "max_weight_kg": 32,
+      "fee_gbp": 75,
+      "booking_required_in_advance_hours": 72,
+      "notes": "Hold pets travel in a pressurised, temperature-controlled cargo hold. An IATA-approved carrier is mandatory. Snub-nosed breeds (e.g. Bulldogs, Pugs, Persian cats) are not accepted in hold due to breathing risk. Maximum one pet per booking."
+    },
+    "not_permitted": ["reptiles", "rodents (except rabbits)", "ferrets", "birds of prey", "insects"],
+    "emotional_support_animals": "Emotional support animals are not accepted as cabin pets. Trained guide dogs and hearing dogs for passengers with disabilities travel free of charge in the cabin."
+  },
+
+  "baggage_allowance": {
+    "summary": "Sky Airways baggage policy varies by ticket class.",
+    "cabin_baggage": {
+      "all_classes": {
+        "hand_luggage": {
+          "max_dimensions_cm": "56 x 45 x 25",
+          "max_weight_kg": 10,
+          "quantity": 1
+        },
+        "personal_item": {
+          "max_dimensions_cm": "40 x 30 x 15",
+          "max_weight_kg": 5,
+          "quantity": 1,
+          "examples": "handbag, laptop bag, small backpack"
+        }
+      }
+    },
+    "hold_baggage": {
+      "economy": {
+        "included_bags": 0,
+        "included_weight_kg": 0,
+        "notes": "No hold baggage included. Must purchase separately."
+      },
+      "business": {
+        "included_bags": 1,
+        "included_weight_kg": 23,
+        "notes": "One 23 kg bag included."
+      },
+      "first": {
+        "included_bags": 2,
+        "included_weight_kg": 32,
+        "notes": "Two bags included, each up to 32 kg."
+      }
+    },
+    "excess_and_additional_fees": {
+      "extra_bag_fee_gbp": 35,
+      "overweight_10_to_23kg_fee_gbp": 0,
+      "overweight_23_to_32kg_fee_gbp": 25,
+      "overweight_above_32kg": "Not accepted",
+      "oversized_bag_fee_gbp": 40,
+      "sports_equipment_fee_gbp": 60,
+      "pram_stroller_fee_gbp": 0,
+      "notes": "Prams and pushchairs are carried free of charge in addition to your normal baggage allowance. Sports equipment includes bicycles, golf clubs, skis, surfboards. Excess fees apply per piece per flight."
+    }
+  },
+
+  "special_assistance": {
+    "summary": "Sky Airways is committed to making air travel accessible for all passengers.",
+    "available_assistance_types": [
+      {
+        "type": "Wheelchair assistance",
+        "code": "WCHR",
+        "description": "Passenger can walk short distances but requires wheelchair for longer distances in terminal.",
+        "notice_required_hours": 48
+      },
+      {
+        "type": "Wheelchair to seat",
+        "code": "WCHS",
+        "description": "Passenger cannot climb steps or walk long distances. Assistance provided from check-in to seat.",
+        "notice_required_hours": 48
+      },
+      {
+        "type": "Wheelchair in cabin",
+        "code": "WCHC",
+        "description": "Passenger is immobile and requires assistance throughout. Must travel with a carer.",
+        "notice_required_hours": 72
+      },
+      {
+        "type": "Visual impairment",
+        "code": "BLND",
+        "description": "Dedicated assistance through airport and to seat. Guide dogs accepted free of charge.",
+        "notice_required_hours": 48
+      },
+      {
+        "type": "Hearing impairment",
+        "code": "DEAF",
+        "description": "Visual alert systems and written communication support. Hearing dogs accepted free of charge.",
+        "notice_required_hours": 48
+      },
+      {
+        "type": "Travelling with medical equipment",
+        "code": "MEDE",
+        "description": "Portable oxygen concentrators and approved medical devices permitted. Prior approval required.",
+        "notice_required_hours": 72
+      },
+      {
+        "type": "Unaccompanied minor",
+        "code": "UM",
+        "description": "Children aged 5–14 travelling alone. Dedicated Sky Airways escort service.",
+        "notice_required_hours": 72,
+        "fee_gbp": 45
+      }
+    ],
+    "booking_process": "Special assistance must be requested at least 48 hours before departure (72 hours for complex needs). Contact our accessibility team or add assistance when booking. The service is free of charge except for unaccompanied minors.",
+    "seating": "Passengers with reduced mobility are pre-assigned suitable seating free of charge. Bulkhead seats with extra legroom are available on request.",
+    "note": "We comply with EU Regulation 1107/2006 on the rights of disabled persons and persons with reduced mobility when travelling by air."
+  },
+
+  "check_in_windows": {
+    "summary": "Sky Airways check-in times and deadlines.",
+    "online_check_in": {
+      "opens_hours_before_departure": 48,
+      "closes_hours_before_departure": 2,
+      "url": "checkin.skyairways.com",
+      "notes": "Online check-in is recommended to save time at the airport. Passengers with hold baggage must still drop bags at the airport."
+    },
+    "airport_check_in": {
+      "opens_hours_before_departure": 3,
+      "closes_minutes_before_departure": 45,
+      "notes": "Check-in desks close strictly 45 minutes before departure. Arriving after this time may result in being denied boarding."
+    },
+    "bag_drop": {
+      "closes_minutes_before_departure": 45
+    },
+    "gate": {
+      "opens_minutes_before_departure": 45,
+      "closes_minutes_before_departure": 15,
+      "notes": "Gates close 15 minutes before departure. Passengers not at the gate by this time will forfeit their seat."
+    },
+    "security_advice": "Allow at least 60 minutes from check-in to gate during peak periods. Dublin Airport security wait times vary; check the airport website.",
+    "flight_status": "Live flight status available at status.skyairways.com or by calling our automated line."
+  },
+
+  "cancellation_refund_policy": {
+    "summary": "Cancellation and refund terms depend on fare type and notice period.",
+    "fare_types": {
+      "saver_economy": {
+        "cancellation_fee_gbp": "full ticket price — non-refundable",
+        "change_fee_gbp": 50,
+        "notes": "Taxes and airport charges refundable (typically £20–40). Name changes not permitted."
+      },
+      "flexible_economy": {
+        "cancellation_notice_more_than_48h_fee_gbp": 0,
+        "cancellation_notice_24_to_48h_fee_gbp": 30,
+        "cancellation_notice_less_than_24h_fee_gbp": 60,
+        "change_fee_gbp": 0,
+        "notes": "Refunds processed within 7–10 business days to original payment method."
+      },
+      "business": {
+        "cancellation_notice_more_than_24h_fee_gbp": 0,
+        "cancellation_notice_less_than_24h_fee_gbp": 50,
+        "change_fee_gbp": 0,
+        "notes": "Full refund if cancelled more than 24 hours before departure."
+      },
+      "first": {
+        "cancellation_fee_gbp": 0,
+        "change_fee_gbp": 0,
+        "notes": "Fully refundable and changeable at any time prior to departure."
+      }
+    },
+    "refund_process": {
+      "method": "Refunds are issued to the original payment method only.",
+      "processing_time_business_days": "7–10",
+      "how_to_request": "Request via website, mobile app, or by calling customer service."
+    },
+    "no_show_policy": "Passengers who do not cancel and fail to board forfeit the full ticket price with no refund.",
+    "flight_disruption": "If Sky Airways cancels or significantly delays your flight (3+ hours), you are entitled to a full refund or free rebooking under EU261/2004."
+  }
+}
