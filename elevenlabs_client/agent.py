@@ -39,7 +39,8 @@ def _webhook_tools(base_url: Optional[str] = None) -> List[Dict[str, Any]]:
                     "type": "object",
                     "properties": {
                         "destination": {"type": "string", "description": "Destination city or airport code"},
-                        "date": {"type": "string", "description": "Date in YYYY-MM-DD format"},
+                        "date": {"type": "string", "description": "Exact date in YYYY-MM-DD format"},
+                        "date_to": {"type": "string", "description": "Upper bound date in YYYY-MM-DD format. Use with sort_by=price to find cheapest flights within a date range (e.g. set to today+7 days to search within the next week)"},
                         "seat_class": {"type": "string", "description": "Cabin class: economy, business, or first"},
                         "max_price_gbp": {"type": "number", "description": "Maximum price in GBP"},
                         "sort_by": {"type": "string", "description": "Sort by: price or departure"},
@@ -156,6 +157,22 @@ def _webhook_tools(base_url: Optional[str] = None) -> List[Dict[str, Any]]:
                 },
             },
         },
+        {
+            "type": "webhook",
+            "name": "flight_status",
+            "description": "Look up the scheduled status of a specific flight by flight number (e.g. AX101). Use this when a customer asks whether their flight is on time, what time it departs or arrives, or wants to check the status of a specific flight.",
+            "api_schema": {
+                "url": f"{base}/api/v1/webhooks/flight-status",
+                "method": "POST",
+                "request_body_schema": {
+                    "type": "object",
+                    "properties": {
+                        "flight_number": {"type": "string", "description": "Flight number e.g. AX101"},
+                    },
+                    "required": ["flight_number"],
+                },
+            },
+        },
     ]
 
 
@@ -214,23 +231,57 @@ def update_agent_prompt(agent_id: str, new_prompt: str) -> None:
     resp.raise_for_status()
 
 
-def update_agent_tools(agent_id: str, base_url: str) -> None:
-    """Update the agent's webhook tool URLs (e.g. after getting a public tunnel URL)."""
-    resp = httpx.patch(
-        f"{ELEVENLABS_BASE_URL}/convai/agents/{agent_id}",
-        headers=_HEADERS,
-        json={
-            "conversation_config": {
-                "agent": {
-                    "prompt": {
-                        "tools": _webhook_tools(base_url),
-                    }
-                }
-            }
-        },
-        timeout=30.0,
+def update_agent_tools(agent_id: str, base_url: str) -> str:
+    """Ensure the agent's webhook tools point at base_url. Returns the agent_id to use.
+
+    ElevenLabs PATCH for tools fails when internal tool library documents are
+    stale, and creates orphaned library entries as a side effect. To avoid this,
+    we compare the current tool URLs against base_url: if they already match we
+    skip entirely; if they don't we delete the agent and recreate it cleanly with
+    the correct URLs. The new agent_id is written back to .env.
+    """
+    import re
+    from pathlib import Path
+
+    agent_data = get_agent(agent_id)
+    current_tools = (
+        agent_data.get("conversation_config", {})
+        .get("agent", {})
+        .get("prompt", {})
+        .get("tools", [])
     )
-    resp.raise_for_status()
+
+    # Check whether any tool URL already uses the desired base_url.
+    if current_tools:
+        first_url = current_tools[0].get("api_schema", {}).get("url", "")
+        if first_url.startswith(base_url.rstrip("/")):
+            return agent_id  # Already pointing at the right tunnel — nothing to do.
+
+    # URLs are stale or no tools attached — recreate the agent with correct URLs.
+    # Preserve whatever prompt is currently on the agent.
+    current_prompt = (
+        agent_data.get("conversation_config", {})
+        .get("agent", {})
+        .get("prompt", {})
+        .get("prompt", "")
+    )
+
+    delete_agent(agent_id)
+    new_id = create_agent(current_prompt, base_url=base_url)
+
+    # Write new agent_id back to .env so future runs pick it up.
+    env_path = Path(".env")
+    if env_path.exists():
+        content = env_path.read_text()
+        content = re.sub(
+            r"^ELEVENLABS_AGENT_ID=.*$",
+            f"ELEVENLABS_AGENT_ID={new_id}",
+            content,
+            flags=re.MULTILINE,
+        )
+        env_path.write_text(content)
+
+    return new_id
 
 
 def delete_agent(agent_id: str) -> None:
