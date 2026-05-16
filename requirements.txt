@@ -32,3 +32,4 @@ pytest-cov==6.0.0
 # Utilities
 rich==13.9.4
 difflib2==0.0.1
+pyngrok>=7.0.0

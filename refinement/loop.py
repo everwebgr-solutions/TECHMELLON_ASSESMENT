@@ -14,16 +14,19 @@ Run: python -m refinement.loop
 from __future__ import annotations
 
 import logging
+import re
+import subprocess
 import sys
 import time
 from typing import Callable, Dict, List, Optional
 
 from config import (
+    API_PORT,
     ELEVENLABS_AGENT_ID,
     MAX_ITERATIONS,
     PASS_THRESHOLD,
 )
-from elevenlabs_client.agent import get_agent, update_agent_prompt
+from elevenlabs_client.agent import get_agent, recreate_agent, update_agent_prompt
 from refinement.code_patcher import build_patch_requests_from_failures, generate_and_apply_patch
 from refinement.evaluator import (
     EvaluationResult,
@@ -67,6 +70,31 @@ def run_loop(
             "Run 'python -m elevenlabs_client.setup' first or set ELEVENLABS_AGENT_ID in .env"
         )
 
+    # Start a public tunnel so ElevenLabs servers can reach our local webhook API
+    tunnel_proc = None
+    public_base_url = None
+    try:
+        tunnel_proc = subprocess.Popen(
+            ["npx", "--yes", "localtunnel", "--port", str(API_PORT)],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        )
+        deadline = time.time() + 45
+        while time.time() < deadline:
+            line = tunnel_proc.stdout.readline()
+            if not line:
+                time.sleep(0.5)
+                continue
+            match = re.search(r"https://[a-z0-9\-]+\.loca\.lt", line)
+            if match:
+                public_base_url = match.group(0).rstrip("/")
+                break
+        if public_base_url:
+            logger.info("[TUNNEL] localtunnel started: %s → localhost:%s", public_base_url, API_PORT)
+        else:
+            logger.warning("[TUNNEL] Could not determine localtunnel URL — webhooks may not be reachable")
+    except Exception as exc:
+        logger.warning("[TUNNEL] Could not start tunnel: %s — webhooks may not be reachable", exc)
+
     def emit(event_type: str, payload: Dict) -> None:
         if on_event:
             on_event(event_type, payload)
@@ -83,6 +111,15 @@ def run_loop(
         )
     except Exception:
         current_prompt = get_initial_prompt()
+
+    # If we have a public tunnel URL, recreate the agent so webhook tools point to it
+    if public_base_url:
+        try:
+            logger.info("[TUNNEL] Recreating agent with public webhook URLs...")
+            agent_id = recreate_agent(agent_id, current_prompt, public_base_url)
+            logger.info("[TUNNEL] New agent created: %s", agent_id)
+        except Exception as exc:
+            logger.warning("[TUNNEL] Failed to recreate agent: %s — continuing with existing agent", exc)
 
     state = LoopState.new(initial_prompt=current_prompt, agent_id=agent_id)
 
@@ -107,7 +144,7 @@ def run_loop(
         logger.info("[SIM] Starting conversation simulation for '%s'", scenario["id"])
 
         def on_turn(role: str, content: str) -> None:
-            emit("conversation_turn", {"role": role, "content": content, "iteration": iteration})
+            emit("conversation_turn", {"message": f"[{role.upper()}] {content}", "role": role, "content": content, "iteration": iteration})
 
         try:
             transcript = simulate_conversation(agent_id, scenario, on_turn=on_turn)
@@ -158,6 +195,8 @@ def run_loop(
                 "reason": "all_passing",
                 "iterations": iteration,
             })
+            if tunnel_proc:
+                tunnel_proc.terminate()
             return state
 
         # ── Step 3: Plan and apply fixes ──────────────────────────────────────
@@ -177,11 +216,11 @@ def run_loop(
                 current_prompt = new_prompt
                 state.current_prompt = new_prompt
 
-                # Push to ElevenLabs
+                # Push updated prompt — recreate agent to avoid tool-ID PATCH conflicts
                 try:
-                    update_agent_prompt(agent_id, new_prompt)
+                    agent_id = recreate_agent(agent_id, new_prompt, public_base_url or "")
                     emit("prompt_updated", {
-                        "message": "System prompt updated on ElevenLabs",
+                        "message": f"System prompt updated — new agent: {agent_id}",
                         "iteration": iteration,
                         "diff": prompt_diff,
                     })
@@ -238,6 +277,9 @@ def run_loop(
         "reason": "max_iterations",
         "iterations": MAX_ITERATIONS,
     })
+
+    if tunnel_proc:
+        tunnel_proc.terminate()
 
     return state
 

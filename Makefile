@@ -13,7 +13,7 @@ seed:
 	python -m api.seed
 
 migrate:
-	alembic upgrade head
+	python3 -m alembic upgrade head
 
 test:
 	pytest tests/ -v --tb=short
