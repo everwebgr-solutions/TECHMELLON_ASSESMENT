@@ -11,7 +11,10 @@ from api.schemas.flight import FlightSearchParams
 
 
 def search_flights(db: Session, params: FlightSearchParams) -> List[Flight]:
-    q = db.query(Flight).filter(Flight.available_seats > 0)
+    q = db.query(Flight).filter(
+        Flight.available_seats > 0,
+        Flight.departure_dt >= datetime.utcnow(),
+    )
 
     if params.destination:
         term = f"%{params.destination.lower()}%"
@@ -22,7 +25,14 @@ def search_flights(db: Session, params: FlightSearchParams) -> List[Flight]:
             target: date = datetime.strptime(params.date, "%Y-%m-%d").date()
             q = q.filter(func.date(Flight.departure_dt) == target.isoformat())
         except ValueError:
-            pass  # invalid date format — ignore filter, return unfiltered results
+            pass
+    elif params.date_to:
+        # date_to without date = open-ended range from now up to date_to (inclusive)
+        try:
+            upper: date = datetime.strptime(params.date_to, "%Y-%m-%d").date()
+            q = q.filter(func.date(Flight.departure_dt) <= upper.isoformat())
+        except ValueError:
+            pass
 
     if params.seat_class:
         q = q.filter(Flight.seat_class == params.seat_class)
@@ -42,16 +52,23 @@ def get_flight(db: Session, flight_id: int) -> Optional[Flight]:
     return db.query(Flight).filter(Flight.id == flight_id).first()
 
 
-def cheapest_in_week(db: Session, destination: Optional[str] = None) -> List[Flight]:
-    """Return the cheapest available flight per destination within the next 7 days."""
-    q = db.query(Flight).filter(
-        Flight.available_seats > 0,
-        Flight.departure_dt >= datetime.utcnow(),
-        Flight.departure_dt <= datetime.utcnow().replace(hour=23, minute=59)
-        .__class__(
-            *(datetime.utcnow().timetuple()[:3]),
-        ),
+def get_flight_by_number(db: Session, flight_number: str) -> Optional[Flight]:
+    return (
+        db.query(Flight)
+        .filter(Flight.flight_number == flight_number.upper())
+        .order_by(Flight.departure_dt.asc())
+        .first()
     )
-    # Simpler: just use search with sort_by=price
-    params = FlightSearchParams(destination=destination, sort_by="price", limit=20)
+
+
+def cheapest_in_week(db: Session, destination: Optional[str] = None) -> List[Flight]:
+    """Return the cheapest available flights within the next 7 days."""
+    from datetime import timedelta
+    upper = (datetime.utcnow() + timedelta(days=7)).date()
+    params = FlightSearchParams(
+        destination=destination,
+        date_to=upper.isoformat(),
+        sort_by="price",
+        limit=20,
+    )
     return search_flights(db, params)
