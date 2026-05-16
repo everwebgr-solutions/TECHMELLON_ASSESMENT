@@ -10,9 +10,9 @@ so inquiry-only conversations are never penalised for not making a booking.
 """
 from __future__ import annotations
 
-from typing import Dict, List, Literal, Optional  # Literal kept for CriterionScore.root_cause
+from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from config import PASS_THRESHOLD
 from llm.base import LLMMessage, with_retry
@@ -28,7 +28,7 @@ class CriterionScore(BaseModel):
         default_factory=list,
         description="Exact quotes from transcript showing the failure. Empty if score >= 8.",
     )
-    root_cause: Literal["prompt", "code", "none"] = Field(
+    root_cause: str = Field(
         ...,
         description=(
             "'prompt' = agent misunderstood, gave wrong policy, skipped steps; "
@@ -40,6 +40,17 @@ class CriterionScore(BaseModel):
         "",
         description="Specific description of the failure cause.",
     )
+
+    @field_validator("root_cause", mode="before")
+    @classmethod
+    def normalize_root_cause(cls, v: object) -> str:
+        """Accept any LLM output and map it to prompt / code / none."""
+        s = str(v).lower()
+        if "prompt" in s:
+            return "prompt"
+        if "code" in s or "api" in s or "webhook" in s or "tool" in s:
+            return "code"
+        return "none"
 
 
 class EvaluationResult(BaseModel):
@@ -85,8 +96,8 @@ UNDERSTANDING (all types)
   Did the agent correctly identify what the customer wanted and address it?
 
 API_CORRECTNESS
-  booking:      Did the agent search flights / create the booking with correct parameters?
-                Did it return accurate flight options and prices?
+  booking:      Did the agent search flights and create the booking with correct parameters?
+                Did it present accurate flight options and prices?
   inquiry:      Did the agent query the correct knowledge-base topic and return ACCURATE
                 policy information? Penalise only for wrong facts or wrong topic lookup.
                 Do NOT penalise for not making a booking — none was expected.
@@ -113,26 +124,71 @@ SCORING SCALE:
 - 3-4:  Poor. Multiple significant failures.
 - 1-2:  Failed completely on this criterion.
 
-ROOT CAUSE (for any score < 8):
-- "prompt": agent misunderstood, wrong policy, skipped required step, poor instruction
-- "code":   tool/webhook returned wrong data, booking failed unexpectedly, API error
-- "none":   no failure (score >= 8)
+ROOT CAUSE — CRITICAL RULES (for any score < 8):
+
+Classify as "code" ONLY when there is explicit evidence in the transcript that a backend
+tool or webhook malfunctioned — for example:
+  - The agent reports an error message from a tool call
+  - A booking was confirmed but details (price, flight number, reference) are clearly wrong
+  - A tool call visibly returned no results when results should exist
+  - The agent says it could not complete an action due to a system error
+
+Classify as "prompt" in ALL other cases, including:
+  - Agent did not call the right tool or called it with wrong parameters
+  - Agent gave incorrect policy information or skipped a required step
+  - Agent misunderstood the customer's request
+  - Agent behaved unnaturally or repeated itself
+  - Any ambiguous case where you cannot see a clear API/tool error
+
+Default to "prompt" when uncertain. Only use "code" when the transcript contains
+clear, specific evidence of a backend failure — not just a bad outcome.
+
+ROOT CAUSE DETAIL FORMAT:
+- For "prompt" failures: describe what the agent did wrong and what it should have done.
+- For "code" failures: you MUST identify the specific backend function at fault using
+  exactly this format on its own line:
+    FILE: api/routes/webhooks.py::function_name
+  Choose from these patchable functions:
+    api/routes/webhooks.py::webhook_search_flights
+    api/routes/webhooks.py::webhook_book_flight
+    api/routes/webhooks.py::webhook_get_booking
+    api/routes/webhooks.py::webhook_cancel_booking
+    api/routes/webhooks.py::webhook_reschedule_booking
+    api/routes/webhooks.py::webhook_add_extras
+    api/routes/webhooks.py::webhook_query_knowledge
+    api/services/flight_service.py::search_flights
+    api/services/flight_service.py::get_flight_by_number
+  If the faulty function is not in this list, classify as "prompt" instead.
 
 Be precise. Quote exact phrases from the transcript when scoring below 8.
 """
 
 
-def _evaluator_user_prompt(scenario: Scenario, transcript: List[Dict]) -> str:
+def _evaluator_user_prompt(scenario: Scenario, transcript: List[Dict], tool_calls: List[Dict]) -> str:
     transcript_text = "\n".join(
         f"[{t['role'].upper()}]: {t['content']}"
         for t in transcript
     )
 
+    if tool_calls:
+        calls_text = "\n".join(
+            f"  {c['tool']}({', '.join(f'{k}={v}' for k, v in c['inputs'].items())}) "
+            f"→ {'ERROR: ' + c['error'] if not c['success'] else 'OK'}"
+            for c in tool_calls
+        )
+        tool_section = f"\nTOOL CALLS (actual API calls made during this conversation):\n{calls_text}\n"
+    else:
+        tool_section = "\nTOOL CALLS: none recorded\n"
+
     return f"""SCENARIO: {scenario['description']}
 CUSTOMER GOAL: {scenario['customer_brief']}
-
+{tool_section}
 TRANSCRIPT:
 {transcript_text}
+
+Use the TOOL CALLS section as ground truth when evaluating api_correctness and classifying
+root causes. If a tool was not called when it should have been, that is a prompt failure.
+If a tool was called and returned an ERROR, that is a code failure.
 
 First classify the conversation type from the transcript, then evaluate the AGENT's
 performance on all 4 criteria using the definitions appropriate for that type.
@@ -145,16 +201,21 @@ For any criterion with score < 8, provide at least one exact failure quote.
 def evaluate_transcript(
     scenario: Scenario,
     transcript: List[Dict],
+    tool_calls: Optional[List[Dict]] = None,
 ) -> EvaluationResult:
     """
     Score a conversation transcript against the scenario criteria.
-    Returns a fully structured EvaluationResult.
+
+    tool_calls is the list of actual webhook invocations recorded during the
+    simulation (from api.routes.webhooks.get_call_log).  When provided, the
+    evaluator can use it as ground truth for api_correctness and root cause
+    classification rather than inferring from conversation text alone.
     """
     evaluator_llm = get_provider("evaluator")
 
     messages = [
         LLMMessage.system(_EVALUATOR_SYSTEM),
-        LLMMessage.user(_evaluator_user_prompt(scenario, transcript)),
+        LLMMessage.user(_evaluator_user_prompt(scenario, transcript, tool_calls or [])),
     ]
 
     result = with_retry(
@@ -166,9 +227,8 @@ def evaluate_transcript(
     )
 
     # Compute overall_pass based on configured threshold
-    threshold = int(PASS_THRESHOLD)
     result.overall_pass = all(
-        criterion.score >= threshold
+        criterion.score >= PASS_THRESHOLD
         for criterion in [
             result.understanding,
             result.api_correctness,

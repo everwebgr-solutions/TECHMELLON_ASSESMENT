@@ -31,12 +31,15 @@ class LoopState:
         evaluation: Any,  # EvaluationResult
         prompt_diff: str,
         code_patches: List[Dict],
+        rolled_back: bool = False,
     ) -> None:
+        from config import PASS_THRESHOLD
         from refinement.evaluator import average_score, scores_dict
 
         self.iterations.append({
             "iteration": iteration,
             "scenario_id": scenario_id,
+            "rolled_back": rolled_back,
             "transcript": transcript,
             "evaluation": {
                 "scores": scores_dict(evaluation),
@@ -57,7 +60,7 @@ class LoopState:
                         ("outcome_confirmation", evaluation.outcome_confirmation),
                         ("naturalness", evaluation.naturalness),
                     ]
-                    if crit.score < 8
+                    if crit.score < PASS_THRESHOLD
                 ],
             },
             "changes": {

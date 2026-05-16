@@ -26,8 +26,8 @@ from config import (
     NGROK_AUTHTOKEN,
     PASS_THRESHOLD,
 )
-from elevenlabs_client.agent import create_agent, get_agent, update_agent_prompt
-from refinement.code_patcher import build_patch_requests_from_failures, generate_and_apply_patch
+from elevenlabs_client.agent import get_agent, update_agent_prompt, update_agent_tools
+from refinement.code_patcher import build_patch_requests_from_failures, generate_and_apply_patch, rollback_applied_patch
 from refinement.evaluator import (
     EvaluationResult,
     average_score,
@@ -37,7 +37,7 @@ from refinement.evaluator import (
     scores_dict,
 )
 from refinement.prompt_fixer import compute_diff, rewrite_prompt
-from refinement.scenarios import get_rotating_scenario
+from refinement.scenarios import get_scenario, get_scenario_for_run
 from refinement.simulator import simulate_conversation
 from refinement.state import LoopState
 from refinement.system_prompt import get_initial_prompt
@@ -47,29 +47,10 @@ logger = logging.getLogger("loop")
 EventCallback = Callable[[str, Dict], None]
 
 
-def _persist_agent_id(agent_id: str) -> None:
-    """Write the new agent ID back to .env so subsequent runs use it."""
-    import re
-    from pathlib import Path
-    env_path = Path(".env")
-    if not env_path.exists():
-        return
-    content = env_path.read_text()
-    if "ELEVENLABS_AGENT_ID" in content:
-        content = re.sub(
-            r"^ELEVENLABS_AGENT_ID=.*$",
-            f"ELEVENLABS_AGENT_ID={agent_id}",
-            content,
-            flags=re.MULTILINE,
-        )
-    else:
-        content += f"\nELEVENLABS_AGENT_ID={agent_id}\n"
-    env_path.write_text(content)
-
-
 def run_loop(
     agent_id: Optional[str] = None,
     on_event: Optional[EventCallback] = None,
+    scenario_id: Optional[str] = None,
 ) -> LoopState:
     """
     Run the full autonomous refinement loop.
@@ -136,42 +117,75 @@ def run_loop(
             on_event(event_type, payload)
         logger.info("[%s] %s", event_type, payload.get("message", ""))
 
-    # Fetch current prompt from ElevenLabs (source of truth) if the agent exists.
-    # If it doesn't exist (deleted externally), fall back to the initial prompt.
-    current_prompt = get_initial_prompt()
-    if agent_id:
-        try:
-            agent_data = get_agent(agent_id)
-            current_prompt = (
-                agent_data.get("conversation_config", {})
-                .get("agent", {})
-                .get("prompt", {})
-                .get("prompt", current_prompt)
-            )
-        except Exception:
-            pass
+    def _push_prompt(base_prompt: str) -> None:
+        """Add today's date header and push the prompt to the existing agent."""
+        from datetime import datetime as _dt
+        today_str = _dt.utcnow().strftime("%Y-%m-%d")
+        dated = f"Today's date is {today_str} (UTC). Use this to interpret relative dates like 'today', 'tomorrow', 'next week'.\n\n{base_prompt}"
+        update_agent_prompt(agent_id, dated)
 
-    # ElevenLabs webhook tools are baked in at agent-creation time and cannot
-    # be updated inline via PATCH.  Create a fresh agent with the tunnel URL
-    # embedded in the tool definitions.  Persist the new ID back to .env so
-    # subsequent runs (and the UI) use the correct agent.
-    logger.info("[AGENT] Creating agent with tunnel webhook URLs → %s", public_base_url)
-    agent_id = create_agent(current_prompt, base_url=public_base_url)
-    logger.info("[AGENT] Agent created: %s", agent_id)
-    _persist_agent_id(agent_id)
+    # Fetch the current base prompt from ElevenLabs (source of truth).
+    # Strip any previously injected date header so we don't accumulate them.
+    import re as _re
+    current_prompt = get_initial_prompt()
+    try:
+        agent_data = get_agent(agent_id)
+        fetched = (
+            agent_data.get("conversation_config", {})
+            .get("agent", {})
+            .get("prompt", {})
+            .get("prompt", current_prompt)
+        )
+        # Remove injected date header from previous runs before storing as base prompt.
+        current_prompt = _re.sub(
+            r"^Today's date is \d{4}-\d{2}-\d{2} \(UTC\)\. Use this.*?\n\n",
+            "",
+            fetched,
+            flags=_re.DOTALL,
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            f"Could not fetch agent {agent_id} from ElevenLabs: {exc}\n"
+            "Check that ELEVENLABS_AGENT_ID in .env is valid, or run 'make setup-agent' to create a new one."
+        ) from exc
+
+    # Ensure webhook tool URLs point at the new ngrok tunnel.
+    # update_agent_tools may recreate the agent (returning a new id) if the
+    # existing tool documents are stale — capture the result in all cases.
+    logger.info("[AGENT] Updating webhook URLs on agent %s → %s", agent_id, public_base_url)
+    agent_id = update_agent_tools(agent_id, public_base_url)
+    _push_prompt(current_prompt)
+    logger.info("[AGENT] Agent %s ready", agent_id)
+
+    # Pick one scenario for the entire run.  If scenario_id is explicitly
+    # provided (e.g. from the UI dropdown), use it directly without advancing
+    # the round-robin index.  Otherwise use get_scenario_for_run() which
+    # picks the next scenario in rotation and persists the updated index.
+    if scenario_id:
+        scenario = get_scenario(scenario_id)
+    else:
+        scenario = get_scenario_for_run()
 
     state = LoopState.new(initial_prompt=current_prompt, agent_id=agent_id)
 
     emit("loop_started", {
-        "message": f"Loop started — run_id={state.run_id}",
+        "message": f"Loop started — run_id={state.run_id} — scenario: {scenario['id']}",
         "run_id": state.run_id,
         "max_iterations": MAX_ITERATIONS,
         "pass_threshold": PASS_THRESHOLD,
+        "scenario_id": scenario["id"],
+        "scenario_description": scenario["description"],
     })
 
-    for iteration in range(1, MAX_ITERATIONS + 1):
-        scenario = get_rotating_scenario(iteration)
+    # Checkpoint: the prompt and list of successful PatchResults from the
+    # previous iteration's fix batch.  Used to roll back if the next
+    # iteration's evaluation is worse.
+    checkpoint_prompt: str = current_prompt
+    checkpoint_patches: list = []   # PatchResult objects (success=True only)
+    checkpoint_score: Optional[float] = None  # score at the last checkpoint (before fixes)
+    prev_average: Optional[float] = None
 
+    for iteration in range(1, MAX_ITERATIONS + 1):
         emit("iteration_started", {
             "message": f"Iteration {iteration}/{MAX_ITERATIONS} — scenario: {scenario['id']}",
             "iteration": iteration,
@@ -181,6 +195,13 @@ def run_loop(
 
         # ── Step 1: Simulate conversation ─────────────────────────────────────
         logger.info("[SIM] Starting conversation simulation for '%s'", scenario["id"])
+        # Clear the API server's tool call log so this simulation starts clean.
+        # The log lives in the API server process; we reach it over HTTP.
+        try:
+            import httpx as _httpx
+            _httpx.delete(f"http://localhost:{API_PORT}/api/v1/webhooks/tool-calls", timeout=5.0)
+        except Exception:
+            pass  # non-fatal — evaluator will just have an empty log
 
         def on_turn(role: str, content: str) -> None:
             emit("conversation_turn", {"message": f"[{role.upper()}] {content}", "role": role, "content": content, "iteration": iteration})
@@ -207,13 +228,28 @@ def run_loop(
 
         # ── Step 2: Evaluate ──────────────────────────────────────────────────
         logger.info("[EVAL] Evaluating transcript...")
+        # Fetch the tool call log from the API server process over HTTP.
+        tool_calls = []
+        try:
+            import httpx as _httpx
+            _resp = _httpx.get(f"http://localhost:{API_PORT}/api/v1/webhooks/tool-calls", timeout=5.0)
+            tool_calls = _resp.json().get("tool_calls", [])
+        except Exception:
+            pass  # non-fatal — evaluator falls back to transcript-only mode
 
         try:
-            evaluation: EvaluationResult = evaluate_transcript(scenario, transcript)
+            evaluation: EvaluationResult = evaluate_transcript(scenario, transcript, tool_calls=tool_calls)
         except Exception as exc:
             logger.error("[EVAL] Evaluation failed: %s", exc)
             emit("error", {"message": f"Evaluation failed: {exc}", "iteration": iteration})
-            continue
+            state.finalize("evaluation_error")
+            if ngrok_tunnel:
+                try:
+                    from pyngrok import ngrok as _ngrok
+                    _ngrok.disconnect(ngrok_tunnel.public_url)
+                except Exception:
+                    pass
+            return state
 
         avg = average_score(evaluation)
         emit("evaluation_complete", {
@@ -224,6 +260,67 @@ def run_loop(
             "overall_pass": evaluation.overall_pass,
             "summary": evaluation.summary,
         })
+
+        # ── Regression check: roll back previous iteration's fixes ─────────────
+        rolled_back = False
+        if prev_average is not None and avg < prev_average:
+            logger.warning(
+                "[ROLLBACK] Score regressed %.1f → %.1f — reverting previous fixes",
+                prev_average, avg,
+            )
+            # Restore prompt
+            if current_prompt != checkpoint_prompt:
+                current_prompt = checkpoint_prompt
+                state.current_prompt = current_prompt
+                try:
+                    _push_prompt(current_prompt)
+                except Exception as exc:
+                    logger.error("[ROLLBACK] Failed to push rolled-back prompt: %s", exc)
+
+            # Restore code patches (in reverse order)
+            for patch_result in reversed(checkpoint_patches):
+                ok = rollback_applied_patch(patch_result)
+                logger.info(
+                    "[ROLLBACK] Code patch %s::%s — %s",
+                    patch_result.file_path, patch_result.function_name,
+                    "restored" if ok else "restore failed",
+                )
+
+            rolled_back = True
+            emit("rollback", {
+                "message": f"Regression detected (avg {prev_average:.1f} → {avg:.1f}) — previous fixes rolled back",
+                "iteration": iteration,
+                "previous_average": prev_average,
+                "current_average": avg,
+            })
+
+            # Reset baseline to the pre-fix score so the next iteration is compared
+            # against the restored state, not the (now-invalid) improved score.
+            prev_average = checkpoint_score
+            checkpoint_patches = []  # patches already reversed — clear to avoid double-rollback
+
+            state.record_iteration(
+                iteration=iteration,
+                scenario_id=scenario["id"],
+                transcript=transcript,
+                evaluation=evaluation,
+                prompt_diff="",
+                code_patches=[],
+                rolled_back=True,
+            )
+            emit("iteration_complete", {
+                "message": f"Iteration {iteration} complete. Rolled back.",
+                "iteration": iteration,
+            })
+            if iteration < MAX_ITERATIONS:
+                time.sleep(2)
+            continue  # skip fix step; next iteration retries from restored state
+
+        # Score held or improved — advance the checkpoint baseline
+        prev_average = avg
+        checkpoint_score = avg   # score at the checkpoint (before any fixes this round)
+        checkpoint_prompt = current_prompt
+        checkpoint_patches = []
 
         # ── Check early termination ────────────────────────────────────────────
         if evaluation.overall_pass:
@@ -267,7 +364,7 @@ def run_loop(
                 state.current_prompt = new_prompt
 
                 try:
-                    update_agent_prompt(agent_id, new_prompt)
+                    _push_prompt(new_prompt)
                     emit("prompt_updated", {
                         "message": f"System prompt updated on agent {agent_id}",
                         "iteration": iteration,
@@ -294,6 +391,9 @@ def run_loop(
                     "diff": result.diff,
                 }
                 applied_patches.append(patch_record)
+
+                if result.success:
+                    checkpoint_patches.append(result)
 
                 emit("code_patched", {
                     "message": f"Patch {'applied' if result.success else 'FAILED'}: {req.file_path}::{req.function_name} — {result.reason}",

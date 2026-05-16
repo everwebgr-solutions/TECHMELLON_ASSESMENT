@@ -53,12 +53,13 @@ class PatchRequest:
 
 
 class PatchResult:
-    def __init__(self, success: bool, file_path: str, function_name: str, reason: str = "", diff: str = ""):
+    def __init__(self, success: bool, file_path: str, function_name: str, reason: str = "", diff: str = "", backup_path: Optional[Path] = None):
         self.success = success
         self.file_path = file_path
         self.function_name = function_name
         self.reason = reason
         self.diff = diff
+        self.backup_path = backup_path
 
 
 def _extract_function_source(file_path: Path, function_name: str) -> Optional[str]:
@@ -266,7 +267,20 @@ def generate_and_apply_patch(request: PatchRequest) -> PatchResult:
 
     return PatchResult(True, request.file_path, request.function_name,
                        f"Patch applied and verified. Backup at {backup_path.name}",
-                       diff=file_diff)
+                       diff=file_diff, backup_path=backup_path)
+
+
+def rollback_applied_patch(result: PatchResult) -> bool:
+    """Restore a successfully applied patch to its pre-patch state using the stored backup."""
+    if not result.success or result.backup_path is None:
+        return False
+    file_path = ROOT_DIR / result.file_path
+    try:
+        _restore_backup(result.backup_path, file_path)
+        _reload_module(result.file_path)
+        return True
+    except Exception:
+        return False
 
 
 def _reload_module(file_path: str) -> None:
@@ -309,14 +323,24 @@ def build_patch_requests_from_failures(
 
 def _parse_file_function(detail: str) -> tuple:
     """
-    Parse file and function from detail string.
-    Looks for patterns like 'api/routes/webhooks.py::function_name'.
-    Falls back to webhook handler if not parseable.
+    Parse file and function from the evaluator's root_cause_detail.
+
+    The evaluator is instructed to include a line of the form:
+        FILE: api/routes/webhooks.py::function_name
+    We match that first, then fall back to the bare path::name pattern.
+    Returns (file_path, function_name).
     """
     import re
+
+    # Primary: labelled format the evaluator is instructed to use
+    match = re.search(r"FILE:\s*([\w/]+\.py)::(\w+)", detail)
+    if match:
+        return match.group(1), match.group(2)
+
+    # Secondary: bare path::function anywhere in the detail string
     match = re.search(r"([\w/]+\.py)::(\w+)", detail)
     if match:
         return match.group(1), match.group(2)
 
-    # Default: webhook layer is the most common code failure point
-    return "api/routes/webhooks.py", "webhook_search_flights"
+    # Fallback — should rarely be reached given the new evaluator prompt
+    return "api/services/flight_service.py", "search_flights"

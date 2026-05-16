@@ -9,7 +9,11 @@ Destinations and prices reflect the seeded database:
 """
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import List, TypedDict
+
+_SCENARIO_STATE_FILE = Path("data/scenario_state.json")
 
 
 class Scenario(TypedDict):
@@ -125,6 +129,52 @@ SCENARIOS: List[Scenario] = [
             "You are ONLY gathering information; you are NOT booking a flight today."
         ),
     },
+    {
+        "id": "delayed_flight_compensation",
+        "description": "Claim EU261 compensation for a significantly delayed flight",
+        "customer_brief": (
+            "Your flight from Dublin to Rome last week was delayed by over 4 hours and you missed an important "
+            "event. You want to know if you are entitled to compensation under EU261/2004 regulations. "
+            "Ask specifically: what the compensation amount would be, how to claim it, and how long it takes. "
+            "Push back if the agent is vague — you want concrete figures and a clear process. "
+            "You do NOT have your booking reference handy but you remember it was a Sky Airways flight "
+            "and you paid around £169 economy. You are frustrated but remain polite."
+        ),
+    },
+    {
+        "id": "last_minute_booking",
+        "description": "Book a same-day flight with tight check-in window awareness",
+        "customer_brief": (
+            "You need to fly from Dublin to London today — it is urgent. Ask for the next available flight "
+            "today. Your name is Daniel Walsh and email is d.walsh@email.com. "
+            "Before confirming the booking, ask the agent what the check-in deadline is so you know if you "
+            "can make it in time. Economy to London costs around £89. "
+            "If the agent confirms there is a flight with enough time to check in, go ahead and book it."
+        ),
+    },
+    {
+        "id": "pet_plus_booking",
+        "description": "Book a flight and arrange cabin pet transport in the same call",
+        "customer_brief": (
+            "You want to book a flight to Amsterdam and also bring your small dog (3 kg) in the cabin. "
+            "Your name is Emma Kelly and email is emma.kelly@email.com. "
+            "First ask whether your dog qualifies for cabin travel, then book the next available economy "
+            "flight to Amsterdam (around £109), and finally ask how to add the pet to the booking and "
+            "what the fee is. You want everything sorted in this one call."
+        ),
+    },
+    {
+        "id": "class_upgrade_enquiry",
+        "description": "Enquire about upgrading an existing economy booking to business class",
+        "customer_brief": (
+            "You booked an economy flight to Paris a few days ago but now want to upgrade to business class. "
+            "You do not have your booking reference with you. Ask the agent how upgrades work — whether you "
+            "can change class on an existing booking or whether you need to cancel and rebook. "
+            "Ask about any fees involved. If you need to rebook, ask to see available business class flights "
+            "to Paris and what they cost (business to Paris is around £333). "
+            "You are willing to pay the difference but want to understand the process first."
+        ),
+    },
 ]
 
 
@@ -135,11 +185,20 @@ def get_scenario(scenario_id: str) -> Scenario:
     raise ValueError(f"Scenario '{scenario_id}' not found")
 
 
-def get_rotating_scenario(iteration: int) -> Scenario:
-    """Return a scenario for the given iteration using round-robin rotation.
+def get_scenario_for_run() -> Scenario:
+    """Pick one scenario for this entire loop run, rotating across runs.
 
-    Cycles through all 10 scenarios in order so each run covers a different
-    subset and no scenario repeats until all others have been tested.
-    iteration is 1-based.
+    The next index is persisted to data/scenario_state.json so that each new
+    run advances to the next scenario, cycling through all 10 in order.
     """
-    return SCENARIOS[(iteration - 1) % len(SCENARIOS)]
+    idx = 0
+    if _SCENARIO_STATE_FILE.exists():
+        try:
+            idx = json.loads(_SCENARIO_STATE_FILE.read_text()).get("next_index", 0)
+        except Exception:
+            idx = 0
+    idx = idx % len(SCENARIOS)
+    scenario = SCENARIOS[idx]
+    _SCENARIO_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _SCENARIO_STATE_FILE.write_text(json.dumps({"next_index": (idx + 1) % len(SCENARIOS)}))
+    return scenario

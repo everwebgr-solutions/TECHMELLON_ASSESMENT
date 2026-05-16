@@ -19,6 +19,10 @@ import logging
 from typing import Callable, Dict, List, Optional
 
 from config import MAX_CONVERSATION_TURNS
+
+# Total wall-clock budget for one simulated conversation.
+# Prevents a single stuck session from blocking the refinement loop indefinitely.
+_CONVERSATION_TIMEOUT = 300.0  # 5 minutes
 from elevenlabs_client.chat import ChatSession
 from llm.base import LLMMessage
 from llm.router import get_provider
@@ -150,5 +154,19 @@ def simulate_conversation(
     Our LLM (LLM_SIMULATOR) drives the customer side turn-by-turn.
     ElevenLabs drives the agent side via Chat Mode WebSocket, calling
     our webhook tools transparently during each agent turn.
+
+    Raises RuntimeError if the conversation exceeds _CONVERSATION_TIMEOUT.
     """
-    return asyncio.run(_run_conversation(agent_id, scenario, on_turn))
+    async def _with_timeout() -> List[Dict[str, str]]:
+        return await asyncio.wait_for(
+            _run_conversation(agent_id, scenario, on_turn),
+            timeout=_CONVERSATION_TIMEOUT,
+        )
+
+    try:
+        return asyncio.run(_with_timeout())
+    except asyncio.TimeoutError as exc:
+        raise RuntimeError(
+            f"Conversation timed out after {_CONVERSATION_TIMEOUT}s — "
+            "the session may be stuck waiting for a webhook or ElevenLabs response"
+        ) from exc
