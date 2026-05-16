@@ -177,7 +177,11 @@ def _webhook_tools(base_url: Optional[str] = None) -> List[Dict[str, Any]]:
 
 
 def _agent_config(system_prompt: str, base_url: Optional[str] = None) -> Dict[str, Any]:
-    return {
+    tts: Dict[str, Any] = {}
+    if ELEVENLABS_VOICE_ID:
+        tts["voice_id"] = ELEVENLABS_VOICE_ID
+
+    config: Dict[str, Any] = {
         "name": "Sky Airways Customer Service",
         "conversation_config": {
             "agent": {
@@ -188,11 +192,11 @@ def _agent_config(system_prompt: str, base_url: Optional[str] = None) -> Dict[st
                 "first_message": "Thank you for calling Sky Airways customer service. My name is Sky, and I'm here to help you today. How can I assist you?",
                 "language": "en",
             },
-            "tts": {
-                "voice_id": ELEVENLABS_VOICE_ID,
-            },
         },
     }
+    if tts:
+        config["conversation_config"]["tts"] = tts
+    return config
 
 
 def create_agent(system_prompt: str, base_url: Optional[str] = None) -> str:
