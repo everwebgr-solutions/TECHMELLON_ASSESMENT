@@ -41,13 +41,26 @@
 .hdr { color: var(--muted); display: block; }
 
 .patchItem { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 8px; }
+.patchRolledBack { border-color: rgba(251,146,60,.35); background: rgba(251,146,60,.04); opacity: .85; }
+.patchHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .patchPath { font-family: var(--mono); color: var(--accent); font-size: 12px; }
 .patchFn   { color: var(--text2); font-size: 11px; margin-left: 4px; }
 .patchIter { color: var(--muted); font-size: 10px; margin-left: 6px; }
 .patchStatus { margin-top: 5px; font-size: 11px; display: flex; align-items: center; gap: 5px; }
-.ok     { color: var(--green); }
-.err    { color: var(--red); }
+.ok       { color: var(--green); }
+.err      { color: var(--red); }
+.reverted { color: #fb923c; }
 .noDiff { margin-top: 6px; font-size: 11px; color: var(--muted); font-style: italic; }
+
+.rolledBackBadge {
+  font-size: 10px; font-weight: 700; letter-spacing: .06em;
+  color: #fb923c; background: rgba(251,146,60,.15);
+  border: 1px solid rgba(251,146,60,.3);
+  border-radius: 4px; padding: 1px 7px; white-space: nowrap; flex-shrink: 0;
+}
+
+.sectionRolledBack .sectionHeader { color: #fb923c; opacity: .8; }
+.diffDimmed { opacity: .45; }
 
 .fixingBar {
   display: flex; align-items: center; gap: 8px;

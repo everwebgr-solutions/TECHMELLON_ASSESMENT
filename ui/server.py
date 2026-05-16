@@ -19,6 +19,7 @@ from typing import AsyncGenerator, Optional
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from config import ELEVENLABS_AGENT_ID, LOGS_DIR
@@ -33,6 +34,10 @@ _INDEX_HTML = _STATIC_DIR / "index.html"
 _loop_running = False
 _loop_thread: Optional[threading.Thread] = None
 _main_event_loop: Optional[asyncio.AbstractEventLoop] = None
+
+
+class StartRequest(BaseModel):
+    scenario_id: Optional[str] = None
 
 
 @app.on_event("startup")
@@ -97,10 +102,26 @@ async def status():
     })
 
 
+@app.get("/scenarios")
+async def list_scenarios():
+    """Return all available scenarios for the UI dropdown."""
+    from refinement.scenarios import SCENARIOS
+    return JSONResponse({
+        "scenarios": [{"id": s["id"], "description": s["description"]} for s in SCENARIOS]
+    })
+
+
 @app.post("/start")
-async def start_loop():
-    """Trigger the refinement loop in a background thread."""
+async def start_loop(req: StartRequest = None):
+    """Trigger the refinement loop in a background thread.
+
+    Optional body: {"scenario_id": "book_next_available"} to pin a specific
+    scenario. Omit or pass null to use the automatic round-robin.
+    """
     global _loop_running, _loop_thread
+
+    if req is None:
+        req = StartRequest()
 
     if _loop_running:
         return JSONResponse({"error": "Loop is already running"}, status_code=409)
@@ -112,6 +133,7 @@ async def start_loop():
         )
 
     _loop_running = True
+    scenario_id = req.scenario_id or None
 
     def run_in_thread():
         global _loop_running
@@ -122,7 +144,7 @@ async def start_loop():
                 if _main_event_loop:
                     bus.emit_from_thread(event_type, payload, _main_event_loop)
 
-            run_loop(on_event=on_event)
+            run_loop(on_event=on_event, scenario_id=scenario_id)
         except Exception as exc:
             if _main_event_loop:
                 bus.emit_from_thread("error", {"message": str(exc)}, _main_event_loop)

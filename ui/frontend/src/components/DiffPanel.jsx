@@ -24,9 +24,12 @@ export function DiffPanel({ diffs, patches, activity }) {
           diffs.length === 0
             ? <Empty icon="📝">No prompt changes yet.</Empty>
             : [...diffs].reverse().map((d, i) => (
-                <div key={i} className={styles.section}>
-                  <div className={styles.sectionHeader}>Iteration {d.iteration}</div>
-                  <DiffBlock diff={d.diff} />
+                <div key={i} className={`${styles.section} ${d.rolledBack ? styles.sectionRolledBack : ''}`}>
+                  <div className={styles.sectionHeader}>
+                    Iteration {d.iteration}
+                    {d.rolledBack && <span className={styles.rolledBackBadge}>↩ ROLLED BACK</span>}
+                  </div>
+                  <DiffBlock diff={d.diff} dimmed={d.rolledBack} />
                 </div>
               ))
         )}
@@ -35,18 +38,23 @@ export function DiffPanel({ diffs, patches, activity }) {
           patches.length === 0
             ? <Empty icon="🔧">No code patches yet.</Empty>
             : [...patches].reverse().map((p, i) => (
-                <div key={i} className={styles.patchItem}>
-                  <div>
-                    <span className={styles.patchPath}>{p.file}</span>
-                    <span className={styles.patchFn}>::{p.function}</span>
-                    <span className={styles.patchIter}>iter {p.iteration}</span>
+                <div key={i} className={`${styles.patchItem} ${p.rolledBack ? styles.patchRolledBack : ''}`}>
+                  <div className={styles.patchHeader}>
+                    <div>
+                      <span className={styles.patchPath}>{p.file}</span>
+                      <span className={styles.patchFn}>::{p.function}</span>
+                      <span className={styles.patchIter}>iter {p.iteration}</span>
+                    </div>
+                    {p.rolledBack && (
+                      <span className={styles.rolledBackBadge}>↩ ROLLED BACK</span>
+                    )}
                   </div>
-                  <div className={`${styles.patchStatus} ${p.success ? styles.ok : styles.err}`}>
-                    {p.success ? '✓' : '✗'} {p.reason}
+                  <div className={`${styles.patchStatus} ${p.rolledBack ? styles.reverted : p.success ? styles.ok : styles.err}`}>
+                    {p.rolledBack ? '↩' : p.success ? '✓' : '✗'} {p.rolledBack ? `Applied then reverted — ${p.reason}` : p.reason}
                   </div>
                   {p.diff
-                    ? <DiffBlock diff={p.diff} />
-                    : p.success && <p className={styles.noDiff}>No source changes recorded.</p>
+                    ? <DiffBlock diff={p.diff} dimmed={p.rolledBack} />
+                    : <p className={styles.noDiff}>{p.success ? 'No source changes recorded.' : 'Patch failed before source was modified.'}</p>
                   }
                 </div>
               ))
@@ -65,9 +73,9 @@ function TabBtn({ label, count, active, onClick }) {
   )
 }
 
-function DiffBlock({ diff }) {
+function DiffBlock({ diff, dimmed }) {
   return (
-    <div className={styles.diffBlock}>
+    <div className={`${styles.diffBlock} ${dimmed ? styles.diffDimmed : ''}`}>
       {diff.split('\n').map((line, i) => {
         let cls = ''
         if (line.startsWith('+') && !line.startsWith('+++')) cls = styles.add

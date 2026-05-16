@@ -1,6 +1,6 @@
 import styles from './Header.module.css'
 
-export function Header({ loopRunning, onStart, onReset }) {
+export function Header({ loopRunning, onStart, onReset, scenarios, selectedScenario, onScenarioChange }) {
   return (
     <header className={styles.header}>
       <div className={styles.brand}>
@@ -14,6 +14,18 @@ export function Header({ loopRunning, onStart, onReset }) {
       <div className={styles.spacer} />
 
       <StatusBadge running={loopRunning} />
+
+      <select
+        className={styles.scenarioSelect}
+        value={selectedScenario}
+        onChange={e => onScenarioChange(e.target.value)}
+        disabled={loopRunning}
+      >
+        <option value="auto">Auto (round-robin)</option>
+        {(scenarios || []).map(s => (
+          <option key={s.id} value={s.id}>{s.description}</option>
+        ))}
+      </select>
 
       <button
         className={`${styles.btn} ${loopRunning ? styles.btnDisabled : styles.btnPrimary}`}

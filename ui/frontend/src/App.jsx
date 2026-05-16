@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Header } from './components/Header'
 import { ConversationFeed } from './components/ConversationFeed'
 import { ScorePanel } from './components/ScorePanel'
@@ -17,13 +17,19 @@ export default function App() {
   const [tab, setTab] = useState('live')
   const [loopRunning, setLoopRunning] = useState(false)
   const [iterations, setIterations] = useState([])
-  // convItems is the flat list of dividers + messages shown in the feed
   const [convItems, setConvItems] = useState([])
-  // current iteration number for score panel
   const [currentIteration, setCurrentIteration] = useState(null)
   const [historyCount, setHistoryCount] = useState(0)
-  // activity: null | 'simulating' | 'evaluating' | 'fixing'
   const [activity, setActivity] = useState(null)
+  const [scenarios, setScenarios] = useState([])
+  const [selectedScenario, setSelectedScenario] = useState('auto')
+
+  useEffect(() => {
+    fetch('/scenarios')
+      .then(r => r.json())
+      .then(d => setScenarios(d.scenarios || []))
+      .catch(() => {})
+  }, [])
 
   const handleEvent = useCallback((event) => {
     const { type } = event
@@ -97,7 +103,22 @@ export default function App() {
       const n = event.iteration
       setIterations(prev => prev.map(it =>
         it.iteration === n
-          ? { ...it, patches: [...it.patches, { file: event.file, function: event.function, success: event.success, reason: event.reason, diff: event.diff, iteration: n }] }
+          ? { ...it, patches: [...it.patches, { file: event.file, function: event.function, success: event.success, reason: event.reason, diff: event.diff, iteration: n, rolledBack: false }] }
+          : it
+      ))
+    }
+
+    if (type === 'rollback') {
+      // The rollback fires at iteration N when N's score is worse than N-1.
+      // The fixes that were reverted belong to iteration N-1.
+      const revertedIter = event.iteration - 1
+      setIterations(prev => prev.map(it =>
+        it.iteration === revertedIter
+          ? {
+              ...it,
+              patches: it.patches.map(p => ({ ...p, rolledBack: true })),
+              diffs:   it.diffs.map(d => ({ ...d, rolledBack: true })),
+            }
           : it
       ))
     }
@@ -106,8 +127,12 @@ export default function App() {
   useEventStream(handleEvent)
 
   function startLoop() {
-    setLoopRunning(true)   // disable button immediately before server responds
-    fetch('/start', { method: 'POST' })
+    setLoopRunning(true)
+    fetch('/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scenario_id: selectedScenario === 'auto' ? null : selectedScenario }),
+    })
       .then(r => r.json())
       .then(d => { if (d.error) { setLoopRunning(false); alert(d.error) } })
       .catch(e => { setLoopRunning(false); alert(e.message) })
@@ -131,7 +156,14 @@ export default function App() {
 
   return (
     <div className={styles.app}>
-      <Header loopRunning={loopRunning} onStart={startLoop} onReset={resetLoop} />
+      <Header
+        loopRunning={loopRunning}
+        onStart={startLoop}
+        onReset={resetLoop}
+        scenarios={scenarios}
+        selectedScenario={selectedScenario}
+        onScenarioChange={setSelectedScenario}
+      />
 
       <nav className={styles.tabs}>
         <button className={`${styles.tab} ${tab === 'live' ? styles.tabActive : ''}`} onClick={() => setTab('live')}>
