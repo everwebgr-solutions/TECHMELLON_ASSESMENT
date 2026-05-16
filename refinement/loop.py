@@ -76,34 +76,58 @@ def run_loop(
     # "click to proceed" landing page that blocks automated POST requests.
     ngrok_tunnel = None
     public_base_url = None
+
+    # Emit immediately so the UI shows feedback while setup runs.
+    # on_event may not exist yet (emit() is defined below), so call directly.
+    if on_event:
+        on_event("initializing", {"message": "Setting up tunnel and agent…"})
+
     try:
         from pyngrok import conf, ngrok
 
         if NGROK_AUTHTOKEN:
             conf.get_default().auth_token = NGROK_AUTHTOKEN
 
-        # Kill stale ngrok in two passes:
-        # 1. Via pyngrok (cleans up tunnels it knows about in this session).
-        # 2. Via OS-level pkill (catches orphaned ngrok processes left by a
-        #    previous Python session that was killed mid-run — pyngrok has no
-        #    knowledge of those and ngrok.kill() silently does nothing for them).
+        # Reuse the existing tunnel if it's already alive (same process, consecutive
+        # runs). Only tear down and restart when no live tunnel exists — saves ~4s.
+        existing = []
         try:
-            for tunnel in ngrok.get_tunnels():
-                ngrok.disconnect(tunnel.public_url)
+            existing = ngrok.get_tunnels()
         except Exception:
             pass
-        try:
-            ngrok.kill()
-        except Exception:
-            pass
-        subprocess.run(["pkill", "-9", "-f", "ngrok"], capture_output=True)
-        time.sleep(1.0)  # let the OS reclaim the port before we re-bind
 
-        ngrok_tunnel = ngrok.connect(API_PORT, "http")
-        public_base_url = ngrok_tunnel.public_url.rstrip("/")
-        # ngrok may return an http:// URL on the free tier — upgrade to https
-        public_base_url = public_base_url.replace("http://", "https://", 1)
-        logger.info("[TUNNEL] ngrok started: %s → localhost:%s", public_base_url, API_PORT)
+        alive_tunnel = next(
+            (t for t in existing if str(API_PORT) in t.config.get("addr", "")),
+            None,
+        )
+
+        if alive_tunnel:
+            public_base_url = alive_tunnel.public_url.rstrip("/")
+            public_base_url = public_base_url.replace("http://", "https://", 1)
+            ngrok_tunnel = alive_tunnel
+            logger.info("[TUNNEL] Reusing existing ngrok tunnel: %s", public_base_url)
+        else:
+            # Kill stale ngrok in two passes:
+            # 1. Via pyngrok (cleans up tunnels it knows about in this session).
+            # 2. Via OS-level pkill (catches orphaned ngrok processes left by a
+            #    previous Python session that was killed mid-run — pyngrok has no
+            #    knowledge of those and ngrok.kill() silently does nothing for them).
+            try:
+                for tunnel in existing:
+                    ngrok.disconnect(tunnel.public_url)
+            except Exception:
+                pass
+            try:
+                ngrok.kill()
+            except Exception:
+                pass
+            subprocess.run(["pkill", "-9", "-f", "ngrok"], capture_output=True)
+            time.sleep(0.5)  # let the OS reclaim the port before we re-bind
+
+            ngrok_tunnel = ngrok.connect(API_PORT, "http")
+            public_base_url = ngrok_tunnel.public_url.rstrip("/")
+            public_base_url = public_base_url.replace("http://", "https://", 1)
+            logger.info("[TUNNEL] ngrok started: %s → localhost:%s", public_base_url, API_PORT)
     except Exception as exc:
         logger.warning("[TUNNEL] Could not start ngrok tunnel: %s — webhooks will not be reachable", exc)
         raise RuntimeError(
@@ -241,15 +265,23 @@ def run_loop(
             evaluation: EvaluationResult = evaluate_transcript(scenario, transcript, tool_calls=tool_calls)
         except Exception as exc:
             logger.error("[EVAL] Evaluation failed: %s", exc)
-            emit("error", {"message": f"Evaluation failed: {exc}", "iteration": iteration})
-            state.finalize("evaluation_error")
-            if ngrok_tunnel:
-                try:
-                    from pyngrok import ngrok as _ngrok
-                    _ngrok.disconnect(ngrok_tunnel.public_url)
-                except Exception:
-                    pass
-            return state
+            emit("error", {"message": f"Evaluation failed (skipping fixes for this iteration): {exc}", "iteration": iteration})
+            state.record_iteration(
+                iteration=iteration,
+                scenario_id=scenario["id"],
+                transcript=transcript,
+                evaluation=None,
+                prompt_diff="",
+                code_patches=[],
+                tool_calls=tool_calls,
+            )
+            emit("iteration_complete", {
+                "message": f"Iteration {iteration} complete. Evaluation failed — no fixes applied.",
+                "iteration": iteration,
+            })
+            if iteration < MAX_ITERATIONS:
+                time.sleep(2)
+            continue
 
         avg = average_score(evaluation)
         emit("evaluation_complete", {
@@ -259,6 +291,7 @@ def run_loop(
             "average": avg,
             "overall_pass": evaluation.overall_pass,
             "summary": evaluation.summary,
+            "tool_calls": tool_calls,
         })
 
         # ── Regression check: roll back previous iteration's fixes ─────────────
@@ -307,6 +340,7 @@ def run_loop(
                 prompt_diff="",
                 code_patches=[],
                 rolled_back=True,
+                tool_calls=tool_calls,
             )
             emit("iteration_complete", {
                 "message": f"Iteration {iteration} complete. Rolled back.",
@@ -331,6 +365,7 @@ def run_loop(
                 evaluation=evaluation,
                 prompt_diff="",
                 code_patches=[],
+                tool_calls=tool_calls,
             )
             state.finalize("all_passing")
             emit("loop_complete", {
@@ -409,6 +444,7 @@ def run_loop(
             evaluation=evaluation,
             prompt_diff=prompt_diff,
             code_patches=applied_patches,
+            tool_calls=tool_calls,
         )
 
         emit("iteration_complete", {

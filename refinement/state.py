@@ -32,16 +32,16 @@ class LoopState:
         prompt_diff: str,
         code_patches: List[Dict],
         rolled_back: bool = False,
+        tool_calls: Optional[List[Dict]] = None,
     ) -> None:
         from config import PASS_THRESHOLD
         from refinement.evaluator import average_score, scores_dict
 
-        self.iterations.append({
-            "iteration": iteration,
-            "scenario_id": scenario_id,
-            "rolled_back": rolled_back,
-            "transcript": transcript,
-            "evaluation": {
+        eval_record: Dict
+        if evaluation is None:
+            eval_record = {"scores": {}, "average": None, "overall_pass": False, "summary": "Evaluation failed", "failures": []}
+        else:
+            eval_record = {
                 "scores": scores_dict(evaluation),
                 "average": average_score(evaluation),
                 "overall_pass": evaluation.overall_pass,
@@ -62,7 +62,15 @@ class LoopState:
                     ]
                     if crit.score < PASS_THRESHOLD
                 ],
-            },
+            }
+
+        self.iterations.append({
+            "iteration": iteration,
+            "scenario_id": scenario_id,
+            "rolled_back": rolled_back,
+            "tool_calls": tool_calls or [],
+            "transcript": transcript,
+            "evaluation": eval_record,
             "changes": {
                 "prompt_changed": bool(prompt_diff),
                 "prompt_diff": prompt_diff,
