@@ -55,6 +55,12 @@ class CriterionScore(BaseModel):
 
 class EvaluationResult(BaseModel):
     scenario_id: str
+    summary: str = Field(
+        default="", description="1-3 sentence summary of what went well and what failed."
+    )
+    overall_pass: bool = Field(
+        ..., description="True if all criteria scores >= pass threshold"
+    )
     understanding: CriterionScore = Field(
         ..., description="Was the customer's request correctly understood?"
     )
@@ -66,12 +72,6 @@ class EvaluationResult(BaseModel):
     )
     naturalness: CriterionScore = Field(
         ..., description="Was the conversation handled naturally end-to-end? Appropriate tone, no unnecessary loops?"
-    )
-    overall_pass: bool = Field(
-        ..., description="True if all criteria scores >= pass threshold"
-    )
-    summary: str = Field(
-        ..., description="1-3 sentence summary of what went well and what failed."
     )
 
 
@@ -128,9 +128,8 @@ ROOT CAUSE — CRITICAL RULES (for any score < 8):
 
 Classify as "code" ONLY when there is explicit evidence in the transcript that a backend
 tool or webhook malfunctioned — for example:
-  - The agent reports an error message from a tool call
-  - A booking was confirmed but details (price, flight number, reference) are clearly wrong
-  - A tool call visibly returned no results when results should exist
+  - A booking was confirmed but the reference number, price, or flight details are clearly wrong
+  - A tool call visibly returned an error when the inputs were valid and well-formatted
   - The agent says it could not complete an action due to a system error
 
 Classify as "prompt" in ALL other cases, including:
@@ -140,8 +139,17 @@ Classify as "prompt" in ALL other cases, including:
   - Agent behaved unnaturally or repeated itself
   - Any ambiguous case where you cannot see a clear API/tool error
 
+IMPORTANT — "not found" results are almost always a PROMPT failure, not code:
+  If a tool returns "not found" or "no results", ask: was the input valid?
+  - Customer gave a fictitious/malformed flight number or booking reference → "prompt"
+    (the agent should handle gracefully, not loop asking the customer to recheck)
+  - Agent called the correct tool with a well-formatted, plausible ID and got "not found" → "prompt"
+    (agent should redirect, not blame the system)
+  - Only classify as "code" if the tool crashed, returned corrupt data, or rejected a
+    correctly-formatted ID that should exist based on earlier conversation context.
+
 Default to "prompt" when uncertain. Only use "code" when the transcript contains
-clear, specific evidence of a backend failure — not just a bad outcome.
+clear, specific evidence of a backend failure — not just a bad or empty result.
 
 ROOT CAUSE DETAIL FORMAT:
 - For "prompt" failures: describe what the agent did wrong and what it should have done.
@@ -164,10 +172,28 @@ Be precise. Quote exact phrases from the transcript when scoring below 8.
 """
 
 
+_MAX_EVAL_TURNS = 18  # keep first 2 + last 16 to stay within local LLM context limits
+
+
+def _truncate_transcript(transcript: List[Dict]) -> tuple[List[Dict], bool]:
+    """Return (truncated_transcript, was_truncated). Keeps head + tail to preserve context."""
+    if len(transcript) <= _MAX_EVAL_TURNS:
+        return transcript, False
+    head = transcript[:2]
+    tail = transcript[-((_MAX_EVAL_TURNS - 2)):]
+    return head + tail, True
+
+
 def _evaluator_user_prompt(scenario: Scenario, transcript: List[Dict], tool_calls: List[Dict]) -> str:
+    truncated, was_truncated = _truncate_transcript(transcript)
+    truncation_note = (
+        f"\n[NOTE: Transcript truncated from {len(transcript)} to {len(truncated)} turns "
+        f"for context length. First 2 and last {len(truncated) - 2} turns shown.]\n"
+        if was_truncated else ""
+    )
     transcript_text = "\n".join(
         f"[{t['role'].upper()}]: {t['content']}"
-        for t in transcript
+        for t in truncated
     )
 
     if tool_calls:
@@ -183,7 +209,7 @@ def _evaluator_user_prompt(scenario: Scenario, transcript: List[Dict], tool_call
     return f"""SCENARIO: {scenario['description']}
 CUSTOMER GOAL: {scenario['customer_brief']}
 {tool_section}
-TRANSCRIPT:
+TRANSCRIPT:{truncation_note}
 {transcript_text}
 
 Use the TOOL CALLS section as ground truth when evaluating api_correctness and classifying
@@ -217,6 +243,9 @@ def evaluate_transcript(
         LLMMessage.system(_EVALUATOR_SYSTEM),
         LLMMessage.user(_evaluator_user_prompt(scenario, transcript, tool_calls or [])),
     ]
+
+    from llm.ollama_provider import _dbg
+    _dbg("EVALUATOR INPUT", messages[-1]["content"])
 
     result = with_retry(
         evaluator_llm.complete,

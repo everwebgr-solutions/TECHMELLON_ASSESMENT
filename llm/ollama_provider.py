@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import time
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Type
 
 import httpx
@@ -9,6 +11,18 @@ from pydantic import BaseModel
 
 from config import OLLAMA_BASE_URL
 from llm.base import LLMProvider, LLMProviderError
+
+_DBG_LOG = Path("logs/debug.log")
+
+
+def _dbg(tag: str, content: str) -> None:
+    try:
+        with open(_DBG_LOG, "a") as f:
+            ts = time.strftime("%H:%M:%S")
+            sep = "=" * 70
+            f.write(f"\n{sep}\n[{ts}] {tag}\n{sep}\n{content}\n")
+    except Exception:
+        pass  # debug logging is always best-effort
 
 
 def _schema_instructions(schema: Type[BaseModel]) -> str:
@@ -37,8 +51,13 @@ def _build_example(schema: Type[BaseModel]) -> Dict[str, Any]:
     """Build a concrete filled example for well-known schemas."""
     from refinement.evaluator import EvaluationResult  # local import to avoid circular
     if schema is EvaluationResult:
+        # Field order here MUST match EvaluationResult declaration order —
+        # the LLM generates JSON in example order, so summary/overall_pass
+        # must come before the four CriterionScore blocks to avoid truncation.
         return {
             "scenario_id": "book_next_available",
+            "summary": "Agent understood the request but the booking failed due to a backend error, and the agent did not confirm the reference.",
+            "overall_pass": False,
             "understanding": {
                 "score": 7,
                 "failure_quotes": ["Agent asked for destination twice without searching"],
@@ -63,8 +82,6 @@ def _build_example(schema: Type[BaseModel]) -> Dict[str, Any]:
                 "root_cause": "none",
                 "root_cause_detail": ""
             },
-            "overall_pass": False,
-            "summary": "Agent understood the request but the booking failed due to a backend error, and the agent did not confirm the reference."
         }
     # Generic fallback
     return {"error": "unknown schema"}
@@ -117,12 +134,23 @@ class OllamaProvider(LLMProvider):
         content: str = resp.json()["message"]["content"]
 
         if response_schema is not None:
+            _dbg(
+                f"LLM RAW RESPONSE → {response_schema.__name__}",
+                content,
+            )
             try:
-                return response_schema.model_validate_json(content)
+                result = response_schema.model_validate_json(content)
+                _dbg(
+                    f"LLM PARSED OK → {response_schema.__name__}",
+                    result.model_dump_json(indent=2),
+                )
+                return result
             except Exception as exc:
+                _dbg(f"LLM PARSE FAILED → {response_schema.__name__}", str(exc))
                 raise ValueError(
                     f"Structured output parse failed for {response_schema.__name__}: {exc}\n"
                     f"Raw response: {content[:500]}"
                 ) from exc
 
+        _dbg("LLM RAW RESPONSE (text)", content[:2000])
         return content
