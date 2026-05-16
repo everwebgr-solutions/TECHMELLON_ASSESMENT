@@ -31,7 +31,7 @@ from refinement.scenarios import Scenario
 logger = logging.getLogger(__name__)
 
 _END_PHRASES = (
-    "thank you so much",
+    "perfect, thank you so much",
     "goodbye",
     "good bye",
     "bye",
@@ -51,7 +51,9 @@ Rules:
 - Stay in character as a real customer at all times
 - Respond naturally and conversationally (1-3 sentences per turn)
 - Provide any personal details the agent needs (use realistic fictional values)
-- If your goal is fully achieved, say "Perfect, thank you so much" and end the call
+- Only say "Perfect, thank you so much" and end the call AFTER the agent has explicitly confirmed \
+the action is complete (e.g. booking reference given, reschedule confirmed, cancellation processed). \
+Do NOT end the call just because the agent offers to proceed or asks for your confirmation.
 - If the agent cannot help after 3 attempts, politely give up and say goodbye
 - Do NOT play both sides of the conversation
 - Do NOT explain what you are doing in brackets
