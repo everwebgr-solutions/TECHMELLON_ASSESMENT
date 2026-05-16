@@ -53,11 +53,12 @@ class PatchRequest:
 
 
 class PatchResult:
-    def __init__(self, success: bool, file_path: str, function_name: str, reason: str = ""):
+    def __init__(self, success: bool, file_path: str, function_name: str, reason: str = "", diff: str = ""):
         self.success = success
         self.file_path = file_path
         self.function_name = function_name
         self.reason = reason
+        self.diff = diff
 
 
 def _extract_function_source(file_path: Path, function_name: str) -> Optional[str]:
@@ -247,8 +248,18 @@ def generate_and_apply_patch(request: PatchRequest) -> PatchResult:
     # Reload the module
     _reload_module(request.file_path)
 
+    import difflib
+    fn_diff = "\n".join(difflib.unified_diff(
+        current_fn_source.splitlines(),
+        new_fn_code.splitlines(),
+        fromfile=f"a/{request.file_path}",
+        tofile=f"b/{request.file_path}",
+        lineterm="",
+    ))
+
     return PatchResult(True, request.file_path, request.function_name,
-                       f"Patch applied and verified. Backup at {backup_path.name}")
+                       f"Patch applied and verified. Backup at {backup_path.name}",
+                       diff=fn_diff)
 
 
 def _reload_module(file_path: str) -> None:

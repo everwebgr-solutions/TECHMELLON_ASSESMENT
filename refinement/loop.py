@@ -276,6 +276,7 @@ def run_loop(
                     "function": req.function_name,
                     "success": result.success,
                     "reason": result.reason,
+                    "diff": result.diff,
                 }
                 applied_patches.append(patch_record)
 

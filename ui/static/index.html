@@ -120,6 +120,13 @@
     .patch-path{font-family:var(--mono);color:var(--accent);font-size:12px} .patch-fn{color:var(--text2);font-size:11px;margin-left:4px}
     .patch-status{margin-top:5px;font-size:11px;display:flex;align-items:center;gap:5px} .patch-status.ok{color:var(--green)} .patch-status.err{color:var(--red)}
 
+    .panel-tabs { display:flex; gap:0; height:100%; align-items:flex-end; }
+    .inner-tab { padding:8px 14px 9px; font-size:12px; font-weight:500; color:var(--text2); cursor:pointer; border-bottom:2px solid transparent; transition:color .15s,border-color .15s; user-select:none; display:flex; align-items:center; gap:6px; height:100%; white-space:nowrap; }
+    .inner-tab:hover { color:var(--text); }
+    .inner-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+    .inner-tab .tab-count { background:var(--border2); color:var(--text2); font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center; }
+    .inner-tab.active .tab-count { background:rgba(79,142,247,.2); color:var(--accent); }
+
     .hist-sidebar { width: 300px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
     .hist-sidebar-header { padding: 14px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--text2); border-bottom: 1px solid var(--border); flex-shrink: 0; }
     .hist-list { flex: 1; overflow-y: auto; padding: 10px; }
@@ -178,7 +185,16 @@
 <div id="live-view">
   <div class="panel"><div class="panel-header">💬 Live Conversation</div><div class="panel-body" id="conv-panel"><div class="empty"><span class="empty-icon">💬</span>Waiting for loop to start…</div></div></div>
   <div class="panel"><div class="panel-header">📊 Current Evaluation</div><div class="panel-body" id="scores-panel"><div class="empty"><span class="empty-icon">📊</span>No evaluation yet.</div></div></div>
-  <div class="panel"><div class="panel-header">🔧 Prompt Changes &amp; Patches</div><div class="panel-body" id="diff-panel"><div class="empty"><span class="empty-icon">🔧</span>No changes yet.</div></div></div>
+  <div class="panel" style="overflow:hidden">
+    <div class="panel-header" style="padding:0 0 0 4px">
+      <div class="panel-tabs">
+        <div class="inner-tab active" id="diff-tab-prompt" onclick="switchDiffTab('prompt')">Prompt Changes <span class="tab-count" id="diff-prompt-count">0</span></div>
+        <div class="inner-tab" id="diff-tab-code" onclick="switchDiffTab('code')">Code Changes <span class="tab-count" id="diff-code-count">0</span></div>
+      </div>
+    </div>
+    <div class="panel-body" id="diff-panel-prompt"><div class="empty"><span class="empty-icon">📝</span>No prompt changes yet.</div></div>
+    <div class="panel-body" id="diff-panel-code" style="display:none"><div class="empty"><span class="empty-icon">🔧</span>No code patches yet.</div></div>
+  </div>
   <div class="panel"><div class="panel-header">🗂 Iteration History</div><div class="panel-body" id="hist-panel"><div class="empty"><span class="empty-icon">🗂</span>No iterations yet.</div></div></div>
 </div>
 
@@ -193,10 +209,13 @@
 </div>
 
 <script>
-  const convPanel   = document.getElementById('conv-panel');
-  const scoresPanel = document.getElementById('scores-panel');
-  const diffPanel   = document.getElementById('diff-panel');
-  const histPanel   = document.getElementById('hist-panel');
+  const convPanel        = document.getElementById('conv-panel');
+  const scoresPanel      = document.getElementById('scores-panel');
+  const diffPanelPrompt  = document.getElementById('diff-panel-prompt');
+  const diffPanelCode    = document.getElementById('diff-panel-code');
+  const histPanel        = document.getElementById('hist-panel');
+
+  let promptDiffCount = 0, codePatchCount = 0;
   const statusBadge = document.getElementById('status-badge');
   const statusText  = document.getElementById('status-text');
   const iterBadge   = document.getElementById('iter-badge');
@@ -260,8 +279,8 @@
         break;
 
       case 'code_patched':
-        if (iterData[ev.iteration]) iterData[ev.iteration].patches.push({ file: ev.file, fn: ev.function, success: ev.success, reason: ev.reason });
-        appendPatch(ev.file, ev.function, ev.success, ev.reason, ev.iteration);
+        if (iterData[ev.iteration]) iterData[ev.iteration].patches.push({ file: ev.file, fn: ev.function, success: ev.success, reason: ev.reason, diff: ev.diff });
+        appendPatch(ev.file, ev.function, ev.success, ev.reason, ev.diff, ev.iteration);
         break;
 
       case 'loop_complete':
@@ -280,10 +299,22 @@
   }
 
   function clearLive() {
-    convPanel.innerHTML   = '';
-    scoresPanel.innerHTML = '<div class="empty"><span class="empty-icon">📊</span>Waiting for evaluation…</div>';
-    diffPanel.innerHTML   = '<div class="empty"><span class="empty-icon">🔧</span>No changes yet.</div>';
-    histPanel.innerHTML   = '<div class="empty"><span class="empty-icon">🗂</span>No iterations yet.</div>';
+    convPanel.innerHTML        = '';
+    scoresPanel.innerHTML      = '<div class="empty"><span class="empty-icon">📊</span>Waiting for evaluation…</div>';
+    diffPanelPrompt.innerHTML  = '<div class="empty"><span class="empty-icon">📝</span>No prompt changes yet.</div>';
+    diffPanelCode.innerHTML    = '<div class="empty"><span class="empty-icon">🔧</span>No code patches yet.</div>';
+    histPanel.innerHTML        = '<div class="empty"><span class="empty-icon">🗂</span>No iterations yet.</div>';
+    promptDiffCount = 0; codePatchCount = 0;
+    document.getElementById('diff-prompt-count').textContent = '0';
+    document.getElementById('diff-code-count').textContent   = '0';
+    switchDiffTab('prompt');
+  }
+
+  function switchDiffTab(tab) {
+    document.getElementById('diff-tab-prompt').classList.toggle('active', tab === 'prompt');
+    document.getElementById('diff-tab-code').classList.toggle('active', tab === 'code');
+    diffPanelPrompt.style.display = tab === 'prompt' ? '' : 'none';
+    diffPanelCode.style.display   = tab === 'code'   ? '' : 'none';
   }
 
   // ── Conversation ──────────────────────────────────────────────────────────
@@ -357,12 +388,12 @@
   // ── Diff / Patch ──────────────────────────────────────────────────────────
   function appendDiff(diff, iter) {
     if (!diff) return;
-    if (diffPanel.querySelector('.empty')) diffPanel.innerHTML = '';
+    if (diffPanelPrompt.querySelector('.empty')) diffPanelPrompt.innerHTML = '';
     const sec = document.createElement('div');
     sec.className = 'diff-section';
     const hdr = document.createElement('div');
     hdr.className = 'diff-section-header';
-    hdr.textContent = `Prompt diff — iteration ${iter}`;
+    hdr.textContent = `Iteration ${iter}`;
     sec.appendChild(hdr);
     const block = document.createElement('div');
     block.className = 'diff-block';
@@ -375,15 +406,39 @@
       block.appendChild(span);
     });
     sec.appendChild(block);
-    diffPanel.prepend(sec);
+    diffPanelPrompt.prepend(sec);
+    promptDiffCount++;
+    document.getElementById('diff-prompt-count').textContent = promptDiffCount;
+    switchDiffTab('prompt');
   }
 
-  function appendPatch(file, fn, success, reason, iter) {
-    if (diffPanel.querySelector('.empty')) diffPanel.innerHTML = '';
+  function renderDiffBlock(diff) {
+    if (!diff) return '';
+    let html = '<div class="diff-block" style="margin-top:8px">';
+    diff.split('\n').forEach(line => {
+      let cls = '';
+      if      (line.startsWith('+') && !line.startsWith('+++')) cls = 'diff-add';
+      else if (line.startsWith('-') && !line.startsWith('---')) cls = 'diff-del';
+      else if (line.startsWith('@@'))                           cls = 'diff-hdr';
+      html += `<span class="${cls}">${esc(line)}</span>`;
+    });
+    html += '</div>';
+    return html;
+  }
+
+  function appendPatch(file, fn, success, reason, diff, iter) {
+    if (diffPanelCode.querySelector('.empty')) diffPanelCode.innerHTML = '';
     const el = document.createElement('div');
     el.className = 'patch-item';
-    el.innerHTML = `<div><span class="patch-path">${esc(file)}</span><span class="patch-fn">::${esc(fn)}</span><span style="color:var(--muted);font-size:10px;margin-left:6px">iter ${iter}</span></div><div class="patch-status ${success?'ok':'err'}">${success?'✓':'✗'} ${esc(reason||'')}</div>`;
-    diffPanel.prepend(el);
+    el.innerHTML = `
+      <div><span class="patch-path">${esc(file)}</span><span class="patch-fn">::${esc(fn)}</span><span style="color:var(--muted);font-size:10px;margin-left:6px">iter ${iter}</span></div>
+      <div class="patch-status ${success?'ok':'err'}">${success?'✓':'✗'} ${esc(reason||'')}</div>
+      ${diff ? renderDiffBlock(diff) : ''}
+    `;
+    diffPanelCode.prepend(el);
+    codePatchCount++;
+    document.getElementById('diff-code-count').textContent = codePatchCount;
+    switchDiffTab('code');
   }
 
   // ── localStorage ──────────────────────────────────────────────────────────
@@ -435,6 +490,13 @@
     if (iters.length) openIter(id, +iters[0][0]);
   }
 
+  function switchHistTab(loopId, iter, tab) {
+    document.getElementById(`hit-tab-prompt-${loopId}-${iter}`).classList.toggle('active', tab === 'prompt');
+    document.getElementById(`hit-tab-code-${loopId}-${iter}`).classList.toggle('active', tab === 'code');
+    document.getElementById(`hit-content-prompt-${loopId}-${iter}`).style.display = tab === 'prompt' ? '' : 'none';
+    document.getElementById(`hit-content-code-${loopId}-${iter}`).style.display   = tab === 'code'   ? '' : 'none';
+  }
+
   function openIter(loopId, iter) {
     document.querySelectorAll('.hist-iter-tab').forEach(t => t.classList.remove('active'));
     const tab = document.getElementById(`hd-tab-${iter}`);
@@ -446,13 +508,19 @@
     const content = document.getElementById('hd-content');
     if (!content) return;
     const cls = v => v >= 8 ? 'pass' : v >= 6 ? 'warn' : 'fail';
+    const tid = `${loopId}-${iter}`;
 
+    // ── Left: conversation ────────────────────────────────────────────────────
     let convHtml = '<div class="hist-panel"><div class="hist-panel-label">Conversation</div>';
     (d.turns||[]).forEach(t => { convHtml += `<div class="message ${t.role}" style="margin-bottom:10px"><div class="msg-role">${t.role==='agent'?'Sky (Agent)':'Customer'}</div><div class="msg-body">${esc(t.content)}</div></div>`; });
     if (!d.turns||!d.turns.length) convHtml += '<div style="color:var(--muted);font-size:13px">No turns recorded.</div>';
     convHtml += '</div>';
 
-    let rightHtml = '<div class="hist-panel"><div class="hist-panel-label">Evaluation &amp; Changes</div>';
+    // ── Right: evaluation + tabbed changes ────────────────────────────────────
+    let rightHtml = '<div class="hist-panel">';
+
+    // Scores
+    rightHtml += '<div class="hist-panel-label">Evaluation</div>';
     if (d.scores) {
       const ac = cls(d.average);
       rightHtml += `<div class="eval-header" style="margin-bottom:12px"><span class="eval-iter">Iteration ${iter}</span>${d.average!=null?`<span class="eval-avg ${ac}" style="color:var(--${ac==='pass'?'green':ac==='warn'?'yellow':'red'})">${d.average.toFixed(1)}<span class="score-denom">/10</span></span>`:''} ${d.overall_pass!==null?`<span class="eval-pass-badge ${d.overall_pass?'pass':'fail'}">${d.overall_pass?'PASS':'FAIL'}</span>`:''}</div><div class="score-grid">`;
@@ -462,18 +530,49 @@
       });
       rightHtml += '</div>';
       if (d.summary) rightHtml += `<div class="summary-text" style="margin-bottom:14px">${esc(d.summary)}</div>`;
+    } else {
+      rightHtml += '<div style="color:var(--muted);font-size:13px;margin-bottom:14px">No evaluation data recorded.</div>';
     }
-    (d.diffs||[]).forEach(df => {
-      rightHtml += '<div class="diff-section"><div class="diff-section-header">Prompt diff</div><div class="diff-block">';
-      df.diff.split('\n').forEach(line => {
-        let c=''; if(line.startsWith('+')&&!line.startsWith('+++'))c='diff-add'; else if(line.startsWith('-')&&!line.startsWith('---'))c='diff-del'; else if(line.startsWith('@@'))c='diff-hdr';
-        rightHtml += `<span class="${c}">${esc(line)}</span>`;
+
+    // Tabbed changes section
+    const promptCount = (d.diffs||[]).length;
+    const codeCount   = (d.patches||[]).length;
+    rightHtml += `
+      <div style="border-top:1px solid var(--border);margin-top:4px">
+        <div class="panel-tabs" style="border-bottom:1px solid var(--border);margin-bottom:12px">
+          <div class="inner-tab active" id="hit-tab-prompt-${tid}" onclick="switchHistTab(${loopId},${iter},'prompt')">
+            Prompt Changes <span class="tab-count">${promptCount}</span>
+          </div>
+          <div class="inner-tab" id="hit-tab-code-${tid}" onclick="switchHistTab(${loopId},${iter},'code')">
+            Code Changes <span class="tab-count">${codeCount}</span>
+          </div>
+        </div>
+        <div id="hit-content-prompt-${tid}">`;
+
+    if (promptCount) {
+      (d.diffs||[]).forEach(df => {
+        rightHtml += '<div class="diff-section"><div class="diff-block">';
+        df.diff.split('\n').forEach(line => {
+          let c=''; if(line.startsWith('+')&&!line.startsWith('+++'))c='diff-add'; else if(line.startsWith('-')&&!line.startsWith('---'))c='diff-del'; else if(line.startsWith('@@'))c='diff-hdr';
+          rightHtml += `<span class="${c}">${esc(line)}</span>`;
+        });
+        rightHtml += '</div></div>';
       });
-      rightHtml += '</div></div>';
-    });
-    (d.patches||[]).forEach(p => { rightHtml += `<div class="patch-item"><div><span class="patch-path">${esc(p.file)}</span><span class="patch-fn">::${esc(p.fn)}</span></div><div class="patch-status ${p.success?'ok':'err'}">${p.success?'✓':'✗'} ${esc(p.reason||'')}</div></div>`; });
-    if (!d.scores&&!(d.diffs||[]).length&&!(d.patches||[]).length) rightHtml += '<div style="color:var(--muted);font-size:13px">No evaluation data recorded.</div>';
-    rightHtml += '</div>';
+    } else {
+      rightHtml += '<div style="color:var(--muted);font-size:13px">No prompt changes this iteration.</div>';
+    }
+
+    rightHtml += `</div><div id="hit-content-code-${tid}" style="display:none">`;
+
+    if (codeCount) {
+      (d.patches||[]).forEach(p => {
+        rightHtml += `<div class="patch-item"><div><span class="patch-path">${esc(p.file)}</span><span class="patch-fn">::${esc(p.fn)}</span></div><div class="patch-status ${p.success?'ok':'err'}">${p.success?'✓':'✗'} ${esc(p.reason||'')}</div>${p.diff?renderDiffBlock(p.diff):''}</div>`;
+      });
+    } else {
+      rightHtml += '<div style="color:var(--muted);font-size:13px">No code patches this iteration.</div>';
+    }
+
+    rightHtml += '</div></div></div>';
     content.innerHTML = convHtml + rightHtml;
   }
 
