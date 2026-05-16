@@ -36,7 +36,14 @@ make migrate     # run Alembic migrations
 make seed        # seed 756 flights across 7 days × 6 destinations × 3 classes
 ```
 
-### 5. Start both servers
+### 5. Create the ElevenLabs agent (one-time)
+
+```bash
+make setup-agent
+# Writes ELEVENLABS_AGENT_ID to .env
+```
+
+### 6. Start both servers
 
 ```bash
 make start       # builds the UI, then starts API (port 8000) + observer UI (port 8001) together
@@ -54,13 +61,6 @@ To kill both servers when running in the background:
 
 ```bash
 make stop        # kills any process on ports 8000 and 8001
-```
-
-### 6. Create the ElevenLabs agent (one-time)
-
-```bash
-make setup-agent
-# Writes ELEVENLABS_AGENT_ID to .env
 ```
 
 ### 7. Run the refinement loop
