@@ -45,7 +45,9 @@ def _log_call(tool: str, inputs: Dict[str, Any], result: Dict[str, Any]) -> None
         "tool": tool,
         "inputs": inputs,
         "success": result.get("success", True),
+        "constraint": result.get("constraint", False),
         "error": result.get("error"),
+        "reference": result.get("reference"),  # booking reference from book_flight on success
     }
     with _call_log_lock:
         _call_log.append(entry)
@@ -59,6 +61,14 @@ def _ok(data: dict) -> dict:
 
 def _err(message: str) -> dict:
     return {"success": False, "error": message}
+
+
+def _constraint(message: str) -> dict:
+    """Expected business outcome (not found, already cancelled, no seats, etc.).
+    The backend worked correctly — this is not a code bug.
+    The agent receives the same error structure so it can tell the customer,
+    but the log marks it as a constraint rather than a failure."""
+    return {"success": False, "error": message, "constraint": True}
 
 
 # ── Webhook request/response models ──────────────────────────────────────────
@@ -144,6 +154,10 @@ def webhook_search_flights(req: SearchFlightsRequest, db: Session = Depends(get_
         })
         _log_call("search_flights", inputs, {"success": True, "count": len(flights)})
         return result
+    except ValueError as exc:
+        result = _constraint(str(exc))
+        _log_call("search_flights", inputs, result)
+        return result
     except Exception as exc:
         result = _err(str(exc))
         _log_call("search_flights", inputs, result)
@@ -177,8 +191,12 @@ def webhook_book_flight(req: BookFlightRequest, db: Session = Depends(get_db)):
         })
         _log_call("book_flight", inputs, {"success": True, "reference": booking.reference})
         return result
+    except ValueError as exc:
+        result = _constraint(str(exc))
+        _log_call("book_flight", inputs, result)
+        return result
     except Exception as exc:
-        result = _err(str(exc))
+        result = _err(f"System error: {str(exc)}")
         _log_call("book_flight", inputs, result)
         return result
 
@@ -225,6 +243,10 @@ def webhook_cancel_booking(req: CancelBookingRequest, db: Session = Depends(get_
         })
         _log_call("cancel_booking", {"reference": req.reference}, {"success": True})
         return result
+    except ValueError as exc:
+        result = _constraint(str(exc))
+        _log_call("cancel_booking", {"reference": req.reference}, result)
+        return result
     except Exception as exc:
         result = _err(str(exc))
         _log_call("cancel_booking", {"reference": req.reference}, result)
@@ -251,6 +273,10 @@ def webhook_reschedule_booking(req: RescheduleBookingRequest, db: Session = Depe
         })
         _log_call("reschedule_booking", inputs, {"success": True})
         return result
+    except ValueError as exc:
+        result = _constraint(str(exc))
+        _log_call("reschedule_booking", inputs, result)
+        return result
     except Exception as exc:
         result = _err(str(exc))
         _log_call("reschedule_booking", inputs, result)
@@ -275,6 +301,10 @@ def webhook_add_extras(req: AddExtrasRequest, db: Session = Depends(get_db)):
         })
         _log_call("add_extras", inputs, {"success": True})
         return result
+    except ValueError as exc:
+        result = _constraint(str(exc))
+        _log_call("add_extras", inputs, result)
+        return result
     except Exception as exc:
         result = _err(str(exc))
         _log_call("add_extras", inputs, result)
@@ -290,9 +320,10 @@ def webhook_query_knowledge(req: QueryKnowledgeRequest):
             result = _ok({"topic": req.topic, "content": results})
             _log_call("query_knowledge", {"topic": req.topic}, {"success": True})
             return result
-        result = _err(f"Unknown topic '{req.topic}'. Available topics: {kb_service.list_topics()}")
-        _log_call("query_knowledge", {"topic": req.topic}, result)
-        return result
+        else:
+            result = _err(f"Unknown topic '{req.topic}'. Available topics: {kb_service.list_topics()}")
+            _log_call("query_knowledge", {"topic": req.topic}, result)
+            return result
     _log_call("query_knowledge", {"topic": req.topic}, {"success": True})
     return _ok({"topic": req.topic, "content": section})
 
