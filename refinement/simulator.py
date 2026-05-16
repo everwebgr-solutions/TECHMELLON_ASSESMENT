@@ -1,23 +1,42 @@
 """
 Conversation simulator.
 
-Uses ElevenLabs' simulate-conversation endpoint to run a full conversation
-server-side. ElevenLabs plays both sides: the airline agent (configured via
-its system prompt and tools) and a simulated customer (driven by our scenario
-prompt). The full transcript is returned in one API call.
+Our LLM (LLM_SIMULATOR) plays the customer; ElevenLabs plays the agent
+via Chat Mode WebSocket (text messages, audio discarded server-side).
+
+Turn loop:
+  1. LLM generates customer utterance from conversation history
+  2. Sent to ElevenLabs via user_transcript WebSocket message
+  3. Agent's text response received via agent_response event
+     (ElevenLabs calls our webhook tools transparently during this step)
+  4. Agent response appended to LLM history as the "user" message
+  5. Repeat until customer signals done or MAX_CONVERSATION_TURNS reached
 """
 from __future__ import annotations
 
-import time
-from typing import Any, Callable, Dict, List, Optional
-
-# Delay between emitting turns so the UI shows messages one-by-one
-# rather than all at once (the ElevenLabs API returns the full transcript in one call)
-_TURN_EMIT_DELAY = 0.4
+import asyncio
+import logging
+from typing import Callable, Dict, List, Optional
 
 from config import MAX_CONVERSATION_TURNS
-from elevenlabs_client.chat import simulate_full_conversation
+from elevenlabs_client.chat import ChatSession
+from llm.base import LLMMessage
+from llm.router import get_provider
 from refinement.scenarios import Scenario
+
+logger = logging.getLogger(__name__)
+
+_END_PHRASES = (
+    "thank you so much",
+    "goodbye",
+    "good bye",
+    "bye",
+    "have a good",
+    "take care",
+    "thanks, bye",
+    "that's all i needed",
+    "that's everything",
+)
 
 _CUSTOMER_SYSTEM_PROMPT_TEMPLATE = """\
 You are roleplaying as a customer calling Sky Airways customer service.
@@ -35,6 +54,90 @@ Rules:
 - Output ONLY what the customer would say
 """
 
+_FIRST_TURN_PROMPT = (
+    "The agent just answered the call. "
+    "Start the conversation by stating your reason for calling."
+)
+
+
+def _is_conversation_over(text: str) -> bool:
+    lower = text.lower()
+    return any(phrase in lower for phrase in _END_PHRASES)
+
+
+def _clean_llm_output(text: str) -> str:
+    """Strip common LLM role prefixes the model sometimes prepends."""
+    for prefix in ("Customer:", "customer:", "User:", "user:"):
+        if text.startswith(prefix):
+            text = text[len(prefix):].strip()
+    return text.strip()
+
+
+async def _run_conversation(
+    agent_id: str,
+    scenario: Scenario,
+    on_turn: Optional[Callable[[str, str], None]],
+) -> List[Dict[str, str]]:
+    llm = get_provider("simulator")
+    system_prompt = _CUSTOMER_SYSTEM_PROMPT_TEMPLATE.format(
+        customer_brief=scenario["customer_brief"]
+    )
+
+    session = ChatSession(agent_id)
+    await session.connect()
+
+    transcript: List[Dict[str, str]] = []
+    # LLM sees: system prompt, then alternating user (=agent) / assistant (=customer)
+    messages = [LLMMessage.system(system_prompt)]
+
+    try:
+        for turn_num in range(1, MAX_CONVERSATION_TURNS + 1):
+            # ── Customer turn ─────────────────────────────────────────────────
+            if turn_num == 1:
+                messages.append(LLMMessage.user(_FIRST_TURN_PROMPT))
+
+            raw_customer = llm.complete(messages)
+            customer_text = _clean_llm_output(
+                raw_customer if isinstance(raw_customer, str) else str(raw_customer)
+            )
+
+            transcript.append({
+                "role": "user",
+                "content": customer_text,
+                "timestamp": str(turn_num),
+            })
+            if on_turn:
+                on_turn("user", customer_text)
+            logger.debug("[SIM] Customer (turn %d): %.80s", turn_num, customer_text)
+
+            # End detection — don't send a goodbye to the agent
+            if _is_conversation_over(customer_text):
+                logger.info("[SIM] Customer ended conversation at turn %d", turn_num)
+                break
+
+            # ── Agent turn (ElevenLabs + our webhooks) ────────────────────────
+            agent_text = await session.send(customer_text)
+
+            transcript.append({
+                "role": "agent",
+                "content": agent_text,
+                "timestamp": str(turn_num),
+            })
+            if on_turn:
+                on_turn("agent", agent_text)
+            logger.debug("[SIM] Agent (turn %d): %.80s", turn_num, agent_text)
+
+            # Update LLM history: what the customer just said, then what the agent replied
+            messages.append(LLMMessage.assistant(customer_text))
+            messages.append(LLMMessage.user(
+                f"Agent said: {agent_text}\n\nWhat do you say next as the customer?"
+            ))
+
+    finally:
+        await session.close()
+
+    return transcript
+
 
 def simulate_conversation(
     agent_id: str,
@@ -42,44 +145,10 @@ def simulate_conversation(
     on_turn: Optional[Callable[[str, str], None]] = None,
 ) -> List[Dict[str, str]]:
     """
-    Run a full simulated conversation for a given scenario.
+    Run a full simulated conversation and return the transcript.
 
-    ElevenLabs handles the full conversation server-side. We supply a
-    customer prompt; ElevenLabs runs the agent + simulated user and returns
-    the complete transcript.
-
-    Args:
-        agent_id: ElevenLabs agent ID
-        scenario: Customer scenario to simulate
-        on_turn: Optional callback(role, content) for real-time streaming
-
-    Returns:
-        Transcript as list of {role, content, timestamp} dicts
+    Our LLM (LLM_SIMULATOR) drives the customer side turn-by-turn.
+    ElevenLabs drives the agent side via Chat Mode WebSocket, calling
+    our webhook tools transparently during each agent turn.
     """
-    customer_prompt = _CUSTOMER_SYSTEM_PROMPT_TEMPLATE.format(
-        customer_brief=scenario["customer_brief"]
-    )
-
-    raw_transcript = simulate_full_conversation(
-        agent_id=agent_id,
-        customer_prompt=customer_prompt,
-        max_turns=MAX_CONVERSATION_TURNS,
-    )
-
-    transcript: List[Dict[str, str]] = []
-    for turn in raw_transcript:
-        role = turn.get("role", "unknown")
-        message = turn.get("message") or ""
-        if not message:
-            continue
-        entry: Dict[str, str] = {
-            "role": role,
-            "content": message,
-            "timestamp": str(turn.get("time_in_call_secs", 0)),
-        }
-        transcript.append(entry)
-        if on_turn:
-            on_turn(role, message)
-            time.sleep(_TURN_EMIT_DELAY)
-
-    return transcript
+    return asyncio.run(_run_conversation(agent_id, scenario, on_turn))

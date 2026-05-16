@@ -14,8 +14,6 @@ Run: python -m refinement.loop
 from __future__ import annotations
 
 import logging
-import re
-import subprocess
 import sys
 import time
 from typing import Callable, Dict, List, Optional
@@ -24,9 +22,10 @@ from config import (
     API_PORT,
     ELEVENLABS_AGENT_ID,
     MAX_ITERATIONS,
+    NGROK_AUTHTOKEN,
     PASS_THRESHOLD,
 )
-from elevenlabs_client.agent import get_agent, recreate_agent, update_agent_prompt
+from elevenlabs_client.agent import create_agent, get_agent, update_agent_prompt
 from refinement.code_patcher import build_patch_requests_from_failures, generate_and_apply_patch
 from refinement.evaluator import (
     EvaluationResult,
@@ -44,8 +43,27 @@ from refinement.system_prompt import get_initial_prompt
 
 logger = logging.getLogger("loop")
 
-
 EventCallback = Callable[[str, Dict], None]
+
+
+def _persist_agent_id(agent_id: str) -> None:
+    """Write the new agent ID back to .env so subsequent runs use it."""
+    import re
+    from pathlib import Path
+    env_path = Path(".env")
+    if not env_path.exists():
+        return
+    content = env_path.read_text()
+    if "ELEVENLABS_AGENT_ID" in content:
+        content = re.sub(
+            r"^ELEVENLABS_AGENT_ID=.*$",
+            f"ELEVENLABS_AGENT_ID={agent_id}",
+            content,
+            flags=re.MULTILINE,
+        )
+    else:
+        content += f"\nELEVENLABS_AGENT_ID={agent_id}\n"
+    env_path.write_text(content)
 
 
 def run_loop(
@@ -70,56 +88,62 @@ def run_loop(
             "Run 'python -m elevenlabs_client.setup' first or set ELEVENLABS_AGENT_ID in .env"
         )
 
-    # Start a public tunnel so ElevenLabs servers can reach our local webhook API
-    tunnel_proc = None
+    # Start a public tunnel so ElevenLabs servers can reach our local webhook API.
+    # pyngrok is used in preference to localtunnel: it is a Python library (no npx
+    # required), returns the public URL synchronously, and does not inject a
+    # "click to proceed" landing page that blocks automated POST requests.
+    ngrok_tunnel = None
     public_base_url = None
     try:
-        tunnel_proc = subprocess.Popen(
-            ["npx", "--yes", "localtunnel", "--port", str(API_PORT)],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-        )
-        deadline = time.time() + 45
-        while time.time() < deadline:
-            line = tunnel_proc.stdout.readline()
-            if not line:
-                time.sleep(0.5)
-                continue
-            match = re.search(r"https://[a-z0-9\-]+\.loca\.lt", line)
-            if match:
-                public_base_url = match.group(0).rstrip("/")
-                break
-        if public_base_url:
-            logger.info("[TUNNEL] localtunnel started: %s → localhost:%s", public_base_url, API_PORT)
-        else:
-            logger.warning("[TUNNEL] Could not determine localtunnel URL — webhooks may not be reachable")
+        from pyngrok import conf, ngrok
+
+        if NGROK_AUTHTOKEN:
+            conf.get_default().auth_token = NGROK_AUTHTOKEN
+
+        # Kill any stale ngrok process left by a previous run before opening a new tunnel.
+        ngrok.kill()
+
+        ngrok_tunnel = ngrok.connect(API_PORT, "http")
+        public_base_url = ngrok_tunnel.public_url.rstrip("/")
+        # ngrok may return an http:// URL on the free tier — upgrade to https
+        public_base_url = public_base_url.replace("http://", "https://", 1)
+        logger.info("[TUNNEL] ngrok started: %s → localhost:%s", public_base_url, API_PORT)
     except Exception as exc:
-        logger.warning("[TUNNEL] Could not start tunnel: %s — webhooks may not be reachable", exc)
+        logger.warning("[TUNNEL] Could not start ngrok tunnel: %s — webhooks will not be reachable", exc)
+        raise RuntimeError(
+            f"ngrok tunnel failed to start: {exc}\n"
+            "Bookings require a public tunnel so ElevenLabs can reach your local API.\n"
+            "Set NGROK_AUTHTOKEN in .env (free account at https://ngrok.com) and retry."
+        ) from exc
 
     def emit(event_type: str, payload: Dict) -> None:
         if on_event:
             on_event(event_type, payload)
         logger.info("[%s] %s", event_type, payload.get("message", ""))
 
-    # Fetch current prompt from ElevenLabs (source of truth)
-    try:
-        agent_data = get_agent(agent_id)
-        current_prompt = (
-            agent_data.get("conversation_config", {})
-            .get("agent", {})
-            .get("prompt", {})
-            .get("prompt", get_initial_prompt())
-        )
-    except Exception:
-        current_prompt = get_initial_prompt()
-
-    # If we have a public tunnel URL, recreate the agent so webhook tools point to it
-    if public_base_url:
+    # Fetch current prompt from ElevenLabs (source of truth) if the agent exists.
+    # If it doesn't exist (deleted externally), fall back to the initial prompt.
+    current_prompt = get_initial_prompt()
+    if agent_id:
         try:
-            logger.info("[TUNNEL] Recreating agent with public webhook URLs...")
-            agent_id = recreate_agent(agent_id, current_prompt, public_base_url)
-            logger.info("[TUNNEL] New agent created: %s", agent_id)
-        except Exception as exc:
-            logger.warning("[TUNNEL] Failed to recreate agent: %s — continuing with existing agent", exc)
+            agent_data = get_agent(agent_id)
+            current_prompt = (
+                agent_data.get("conversation_config", {})
+                .get("agent", {})
+                .get("prompt", {})
+                .get("prompt", current_prompt)
+            )
+        except Exception:
+            pass
+
+    # ElevenLabs webhook tools are baked in at agent-creation time and cannot
+    # be updated inline via PATCH.  Create a fresh agent with the tunnel URL
+    # embedded in the tool definitions.  Persist the new ID back to .env so
+    # subsequent runs (and the UI) use the correct agent.
+    logger.info("[AGENT] Creating agent with tunnel webhook URLs → %s", public_base_url)
+    agent_id = create_agent(current_prompt, base_url=public_base_url)
+    logger.info("[AGENT] Agent created: %s", agent_id)
+    _persist_agent_id(agent_id)
 
     state = LoopState.new(initial_prompt=current_prompt, agent_id=agent_id)
 
@@ -151,7 +175,14 @@ def run_loop(
         except Exception as exc:
             logger.error("[SIM] Simulation failed: %s", exc)
             emit("error", {"message": f"Simulation failed: {exc}", "iteration": iteration})
-            continue
+            state.finalize("simulation_error")
+            if ngrok_tunnel:
+                try:
+                    from pyngrok import ngrok as _ngrok
+                    _ngrok.disconnect(ngrok_tunnel.public_url)
+                except Exception:
+                    pass
+            return state
 
         emit("simulation_complete", {
             "message": f"Conversation complete — {len(transcript)} turns",
@@ -195,8 +226,12 @@ def run_loop(
                 "reason": "all_passing",
                 "iterations": iteration,
             })
-            if tunnel_proc:
-                tunnel_proc.terminate()
+            if ngrok_tunnel:
+                try:
+                    from pyngrok import ngrok as _ngrok
+                    _ngrok.disconnect(ngrok_tunnel.public_url)
+                except Exception:
+                    pass
             return state
 
         # ── Step 3: Plan and apply fixes ──────────────────────────────────────
@@ -216,11 +251,10 @@ def run_loop(
                 current_prompt = new_prompt
                 state.current_prompt = new_prompt
 
-                # Push updated prompt — recreate agent to avoid tool-ID PATCH conflicts
                 try:
-                    agent_id = recreate_agent(agent_id, new_prompt, public_base_url or "")
+                    update_agent_prompt(agent_id, new_prompt)
                     emit("prompt_updated", {
-                        "message": f"System prompt updated — new agent: {agent_id}",
+                        "message": f"System prompt updated on agent {agent_id}",
                         "iteration": iteration,
                         "diff": prompt_diff,
                     })
@@ -278,8 +312,12 @@ def run_loop(
         "iterations": MAX_ITERATIONS,
     })
 
-    if tunnel_proc:
-        tunnel_proc.terminate()
+    if ngrok_tunnel:
+        try:
+            from pyngrok import ngrok as _ngrok
+            _ngrok.disconnect(ngrok_tunnel.public_url)
+        except Exception:
+            pass
 
     return state
 

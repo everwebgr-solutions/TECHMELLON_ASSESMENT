@@ -117,5 +117,12 @@ def get_scenario(scenario_id: str) -> Scenario:
 
 
 def get_rotating_scenario(iteration: int) -> Scenario:
-    """Return scenarios in round-robin order by iteration (1-indexed)."""
-    return SCENARIOS[(iteration - 1) % len(SCENARIOS)]
+    """Return a scenario for the given iteration.
+
+    Picks randomly so each run tests different scenarios rather than always
+    starting at the same one. The iteration seed keeps it deterministic
+    within a single run while varying across runs.
+    """
+    import random
+    rng = random.Random()  # unseeded = different each run
+    return rng.choice(SCENARIOS)

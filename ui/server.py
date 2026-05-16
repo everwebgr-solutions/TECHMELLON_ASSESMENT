@@ -19,6 +19,7 @@ from typing import AsyncGenerator, Optional
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from config import ELEVENLABS_AGENT_ID, LOGS_DIR
 from ui.events import bus
@@ -26,6 +27,7 @@ from ui.events import bus
 app = FastAPI(title="Sky Airways Refinement Loop — Observer UI")
 
 _STATIC_DIR = Path(__file__).parent / "static"
+_INDEX_HTML = _STATIC_DIR / "index.html"
 
 # Loop state
 _loop_running = False
@@ -41,26 +43,31 @@ async def _store_event_loop():
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard():
-    html_path = _STATIC_DIR / "index.html"
-    if html_path.exists():
-        return HTMLResponse(html_path.read_text())
-    return HTMLResponse("<h1>UI files not found</h1>")
+    if _INDEX_HTML.exists():
+        return HTMLResponse(_INDEX_HTML.read_text())
+    return HTMLResponse("<h1>UI not built. Run: cd ui/frontend && npm run build</h1>", status_code=503)
 
 
 @app.get("/events")
 async def sse_stream():
     """Server-Sent Events stream for real-time loop updates."""
     async def generate() -> AsyncGenerator[str, None]:
-        # Send history first so a fresh page load catches up
-        for event in bus.get_history():
-            yield bus.format_sse(event)
-
+        # Subscribe BEFORE snapshotting history to avoid missing events
+        # emitted between the two operations.
         q = bus.subscribe()
         try:
+            snapshot = bus.get_history()
+            seen_ids = set()
+            for event in snapshot:
+                seen_ids.add(id(event))
+                yield bus.format_sse(event)
+
             while True:
                 try:
                     event = await asyncio.wait_for(q.get(), timeout=30.0)
-                    yield bus.format_sse(event)
+                    # Skip events already sent via the history snapshot
+                    if id(event) not in seen_ids:
+                        yield bus.format_sse(event)
                 except asyncio.TimeoutError:
                     yield ": heartbeat\n\n"  # keep connection alive
         except asyncio.CancelledError:
@@ -128,6 +135,21 @@ async def start_loop():
     return JSONResponse({"message": "Loop started", "agent_id": ELEVENLABS_AGENT_ID})
 
 
+@app.post("/reset")
+async def reset_loop():
+    """Force-reset loop state — use when a run crashed and the button is stuck."""
+    global _loop_running, _loop_thread
+    _loop_running = False
+    _loop_thread = None
+    bus._history.clear()
+    try:
+        from ui.events import _HISTORY_FILE
+        _HISTORY_FILE.write_text("")
+    except Exception:
+        pass
+    return JSONResponse({"message": "Loop state reset. Refresh the page."})
+
+
 @app.get("/logs")
 async def list_logs():
     """List available run log files."""
@@ -142,3 +164,8 @@ async def get_log(filename: str):
     if not log_path.exists() or not log_path.name.startswith("run_"):
         return JSONResponse({"error": "Log not found"}, status_code=404)
     return JSONResponse(json.loads(log_path.read_text()))
+
+
+# Serve Vite-built static assets (JS/CSS chunks, favicon, etc.)
+# Mounted LAST so all explicit API routes above take precedence.
+app.mount("/", StaticFiles(directory=str(_STATIC_DIR), html=True), name="static")

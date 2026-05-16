@@ -191,8 +191,12 @@ def create_agent(system_prompt: str, base_url: Optional[str] = None) -> str:
     return agent_id
 
 
-def update_agent_prompt(agent_id: str, new_prompt: str, base_url: Optional[str] = None) -> None:
-    """Push an updated system prompt to an existing ElevenLabs agent."""
+def update_agent_prompt(agent_id: str, new_prompt: str) -> None:
+    """Push an updated system prompt to an existing agent.
+
+    Only the prompt text is patched — tools are created at agent-creation time
+    via POST and cannot be updated inline via PATCH.
+    """
     resp = httpx.patch(
         f"{ELEVENLABS_BASE_URL}/convai/agents/{agent_id}",
         headers=_HEADERS,
@@ -201,7 +205,6 @@ def update_agent_prompt(agent_id: str, new_prompt: str, base_url: Optional[str] 
                 "agent": {
                     "prompt": {
                         "prompt": new_prompt,
-                        "tools": _webhook_tools(base_url),
                     }
                 }
             }

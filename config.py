@@ -20,6 +20,11 @@ PATCHES_BACKUP_DIR = DATA_DIR / "patches" / "backup"
 for _d in (DATA_DIR, LOGS_DIR, PATCHES_BACKUP_DIR):
     _d.mkdir(parents=True, exist_ok=True)
 
+# ── Tunnel ────────────────────────────────────────────────────────────────────
+# Optional ngrok auth token — required for stable tunnels (free account at ngrok.com).
+# Without it pyngrok still works but is limited to one session and may be slower.
+NGROK_AUTHTOKEN: str = os.environ.get("NGROK_AUTHTOKEN", "")
+
 # ── ElevenLabs ────────────────────────────────────────────────────────────────
 ELEVENLABS_API_KEY: str = os.environ.get("ELEVENLABS_API_KEY", "")
 ELEVENLABS_AGENT_ID: str = os.environ.get("ELEVENLABS_AGENT_ID", "")
