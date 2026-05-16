@@ -1,0 +1,40 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #0b0d14;
+  --surface:  #13161f;
+  --surface2: #1a1d2a;
+  --border:   #252836;
+  --border2:  #2e3245;
+  --accent:   #4f8ef7;
+  --accent2:  #7c5cfc;
+  --green:    #22c55e;
+  --red:      #ef4444;
+  --yellow:   #f59e0b;
+  --text:     #dde2ef;
+  --text2:    #9299b0;
+  --muted:    #555e7a;
+  --mono:     'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  --radius:   10px;
+  --header-h: 56px;
+  --tabs-h:   44px;
+}
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+pre, code { font-family: var(--mono); }

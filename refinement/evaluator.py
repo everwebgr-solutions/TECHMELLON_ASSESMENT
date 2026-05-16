@@ -3,10 +3,14 @@ Transcript evaluator — a separate LLM call scores the conversation.
 
 Produces structured EvaluationResult with per-criterion scores,
 failure quotes, and root cause classification (prompt vs code).
+
+The evaluator first classifies the conversation type from the transcript
+(booking / inquiry / modification) and applies appropriate criteria —
+so inquiry-only conversations are never penalised for not making a booking.
 """
 from __future__ import annotations
 
-from typing import Dict, List, Literal, Optional
+from typing import Dict, List, Literal, Optional  # Literal kept for CriterionScore.root_cause
 
 from pydantic import BaseModel, Field
 
@@ -44,10 +48,10 @@ class EvaluationResult(BaseModel):
         ..., description="Was the customer's request correctly understood?"
     )
     api_correctness: CriterionScore = Field(
-        ..., description="Was the right tool called with correct parameters? Did it return correct data?"
+        ..., description="Were the right tools/knowledge-base topics used correctly? Did they return accurate data?"
     )
     outcome_confirmation: CriterionScore = Field(
-        ..., description="Was the outcome clearly confirmed to the customer (booking ref, price, policy details)?"
+        ..., description="Was the conversation-appropriate outcome clearly confirmed to the customer?"
     )
     naturalness: CriterionScore = Field(
         ..., description="Was the conversation handled naturally end-to-end? Appropriate tone, no unnecessary loops?"
@@ -65,24 +69,56 @@ class EvaluationResult(BaseModel):
 _EVALUATOR_SYSTEM = """\
 You are an expert evaluator assessing AI airline customer service agent conversations.
 
-Your task: score the agent's performance on 4 criteria, identify exact failures with quotes,
-and classify the root cause of each failure.
+STEP 1 — CLASSIFY THE CONVERSATION
+Read the transcript and determine what actually happened:
+- "booking"      — the customer purchased or tried to purchase a flight ticket
+- "inquiry"      — the customer only asked for information (policy, prices, availability);
+                   no purchase was intended or attempted
+- "modification" — the customer wanted to change, cancel, or add to an existing booking
 
-SCORING GUIDELINES:
+Use the conversation content to classify, not just the scenario description.
+
+STEP 2 — SCORE ON 4 CRITERIA
+Apply the criterion definitions that match the conversation type you identified.
+
+UNDERSTANDING (all types)
+  Did the agent correctly identify what the customer wanted and address it?
+
+API_CORRECTNESS
+  booking:      Did the agent search flights / create the booking with correct parameters?
+                Did it return accurate flight options and prices?
+  inquiry:      Did the agent query the correct knowledge-base topic and return ACCURATE
+                policy information? Penalise only for wrong facts or wrong topic lookup.
+                Do NOT penalise for not making a booking — none was expected.
+  modification: Did the agent correctly explain the modification process and, where a
+                real booking existed, execute the right API call? If no booking reference
+                was available, did it handle that gracefully rather than failing?
+
+OUTCOME_CONFIRMATION
+  booking:      Did the agent confirm the booking with a reference number, price, and
+                itinerary summary?
+  inquiry:      Did the agent clearly answer all of the customer's specific questions?
+                Do NOT penalise for absence of a booking reference — none is expected.
+  modification: Did the agent confirm either (a) the change was completed, or (b) the
+                process and next steps when no real booking was available?
+
+NATURALNESS (all types)
+  Was the conversation fluent and natural? Appropriate tone, no unnecessary loops,
+  no robotic repetition, handled edge cases gracefully?
+
+SCORING SCALE:
 - 9-10: Near perfect. No meaningful issues.
-- 7-8: Good. Minor issues only.
-- 5-6: Acceptable. Some clear failures.
-- 3-4: Poor. Multiple significant failures.
-- 1-2: Failed completely on this criterion.
+- 7-8:  Good. Minor issues only.
+- 5-6:  Acceptable. Some clear failures.
+- 3-4:  Poor. Multiple significant failures.
+- 1-2:  Failed completely on this criterion.
 
-ROOT CAUSE CLASSIFICATION:
-- "prompt": The agent misunderstood the request, gave incorrect policy information,
-  skipped a required step (like confirming before booking), or was poorly instructed.
-- "code": A tool/webhook returned wrong data, a booking failed unexpectedly,
-  the wrong flight was returned, or an API error occurred.
-- "none": The criterion passed (score >= 8).
+ROOT CAUSE (for any score < 8):
+- "prompt": agent misunderstood, wrong policy, skipped required step, poor instruction
+- "code":   tool/webhook returned wrong data, booking failed unexpectedly, API error
+- "none":   no failure (score >= 8)
 
-Be precise. Quote exact phrases. Do not be lenient — this data drives automated fixes.
+Be precise. Quote exact phrases from the transcript when scoring below 8.
 """
 
 
@@ -98,9 +134,9 @@ CUSTOMER GOAL: {scenario['customer_brief']}
 TRANSCRIPT:
 {transcript_text}
 
-Evaluate the AGENT's performance on all 4 criteria.
-For any criterion with score < 8, provide at least one exact failure quote from the transcript.
-Classify root cause for each failure as 'prompt', 'code', or 'none'.
+First classify the conversation type from the transcript, then evaluate the AGENT's
+performance on all 4 criteria using the definitions appropriate for that type.
+For any criterion with score < 8, provide at least one exact failure quote.
 """
 
 
@@ -125,7 +161,7 @@ def evaluate_transcript(
         evaluator_llm.complete,
         messages,
         response_schema=EvaluationResult,
-        temperature=0.3,  # Low temperature for consistent scoring
+        temperature=0.3,
         max_attempts=3,
     )
 

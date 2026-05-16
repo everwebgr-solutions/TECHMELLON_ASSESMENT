@@ -1,13 +1,29 @@
-.PHONY: install dev seed test loop ui lint clean
+.PHONY: install dev seed test loop ui ui-build start stop lint clean
 
 install:
 	pip install -r requirements.txt
 
 dev:
-	uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+	python3 -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 
-ui:
-	uvicorn ui.server:app --host 0.0.0.0 --port 8001 --reload
+ui-build:
+	cd ui/frontend && npm run build
+
+ui: ui-build
+	python3 -m uvicorn ui.server:app --host 0.0.0.0 --port 8001 --reload
+
+# Kill any uvicorn processes running on ports 8000 and 8001.
+stop:
+	@lsof -ti :8000 | xargs kill -9 2>/dev/null && echo "Stopped port 8000" || echo "Nothing on port 8000"
+	@lsof -ti :8001 | xargs kill -9 2>/dev/null && echo "Stopped port 8001" || echo "Nothing on port 8001"
+
+# Run API + observer UI together. Ctrl-C stops both.
+start: ui-build
+	@echo "→ API server   http://localhost:8000"
+	@echo "→ Observer UI  http://localhost:8001"
+	@python3 -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload &\
+	 python3 -m uvicorn ui.server:app --host 0.0.0.0 --port 8001 --reload &\
+	 wait
 
 seed:
 	python -m api.seed
@@ -16,13 +32,13 @@ migrate:
 	python3 -m alembic upgrade head
 
 test:
-	pytest tests/ -v --tb=short
+	python3 -m pytest tests/ -v --tb=short
 
 test-cov:
-	pytest tests/ -v --cov=api --cov=refinement --cov-report=html
+	python3 -m pytest tests/ -v --cov=api --cov=refinement --cov-report=html
 
 loop:
-	python -m refinement.loop
+	python3 -m refinement.loop
 
 setup-agent:
 	python -m elevenlabs_client.setup

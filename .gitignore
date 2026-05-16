@@ -23,7 +23,7 @@ data/airline.db-shm
 data/airline.db-wal
 
 # Logs (keep structure, ignore generated logs)
-logs/*.json
+logs/run_*.json
 logs/*.jsonl
 
 # Patches backup
@@ -43,3 +43,6 @@ Thumbs.db
 .coverage
 htmlcov/
 .pytest_cache/
+
+# Frontend
+ui/frontend/node_modules/

@@ -76,6 +76,8 @@ class QueryKnowledgeRequest(BaseModel):
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("/search-flights")
+@router.post("/search-flights")
+@router.post("/search-flights")
 def webhook_search_flights(req: SearchFlightsRequest, db: Session = Depends(get_db)):
     try:
         params = FlightSearchParams(

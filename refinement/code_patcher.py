@@ -85,7 +85,11 @@ def _replace_function_in_source(
     function_name: str,
     new_function_code: str,
 ) -> Optional[str]:
-    """Replace a named function in a source file, preserving everything else."""
+    """Replace a named function in a source file, preserving everything else.
+
+    Decorators are intentionally preserved: the LLM is instructed to output
+    only the 'def ...' block, so we replace from the 'def' line only.
+    """
     try:
         tree = ast.parse(original_source)
     except SyntaxError:
@@ -96,11 +100,12 @@ def _replace_function_in_source(
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             if node.name == function_name:
-                start = node.decorator_list[0].lineno - 1 if node.decorator_list else node.lineno - 1
+                # Start from the 'def' line — decorators above are left untouched.
+                def_start = node.lineno - 1
                 end = node.end_lineno
 
                 new_lines = (
-                    lines[:start]
+                    lines[:def_start]
                     + new_function_code.splitlines()
                     + lines[end:]
                 )
@@ -237,29 +242,31 @@ def generate_and_apply_patch(request: PatchRequest) -> PatchResult:
         return PatchResult(False, request.file_path, request.function_name,
                            "Failed to replace function in source file")
 
+    # Compute diff now (before tests) so it is available on both success and failure.
+    import difflib
+    file_diff = "\n".join(difflib.unified_diff(
+        original_source.splitlines(),
+        patched_source.splitlines(),
+        fromfile=f"a/{request.file_path}",
+        tofile=f"b/{request.file_path}",
+        lineterm="",
+    ))
+
     file_path.write_text(patched_source)
 
     # Gate 5: run tests
     if not _run_tests():
         _restore_backup(backup_path, file_path)
         return PatchResult(False, request.file_path, request.function_name,
-                           "Tests failed after patch — rolled back to backup")
+                           "Tests failed after patch — rolled back to backup",
+                           diff=file_diff)
 
     # Reload the module
     _reload_module(request.file_path)
 
-    import difflib
-    fn_diff = "\n".join(difflib.unified_diff(
-        current_fn_source.splitlines(),
-        new_fn_code.splitlines(),
-        fromfile=f"a/{request.file_path}",
-        tofile=f"b/{request.file_path}",
-        lineterm="",
-    ))
-
     return PatchResult(True, request.file_path, request.function_name,
                        f"Patch applied and verified. Backup at {backup_path.name}",
-                       diff=fn_diff)
+                       diff=file_diff)
 
 
 def _reload_module(file_path: str) -> None:

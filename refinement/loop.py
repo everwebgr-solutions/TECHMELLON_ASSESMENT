@@ -14,6 +14,7 @@ Run: python -m refinement.loop
 from __future__ import annotations
 
 import logging
+import subprocess
 import sys
 import time
 from typing import Callable, Dict, List, Optional
@@ -100,8 +101,22 @@ def run_loop(
         if NGROK_AUTHTOKEN:
             conf.get_default().auth_token = NGROK_AUTHTOKEN
 
-        # Kill any stale ngrok process left by a previous run before opening a new tunnel.
-        ngrok.kill()
+        # Kill stale ngrok in two passes:
+        # 1. Via pyngrok (cleans up tunnels it knows about in this session).
+        # 2. Via OS-level pkill (catches orphaned ngrok processes left by a
+        #    previous Python session that was killed mid-run — pyngrok has no
+        #    knowledge of those and ngrok.kill() silently does nothing for them).
+        try:
+            for tunnel in ngrok.get_tunnels():
+                ngrok.disconnect(tunnel.public_url)
+        except Exception:
+            pass
+        try:
+            ngrok.kill()
+        except Exception:
+            pass
+        subprocess.run(["pkill", "-9", "-f", "ngrok"], capture_output=True)
+        time.sleep(1.0)  # let the OS reclaim the port before we re-bind
 
         ngrok_tunnel = ngrok.connect(API_PORT, "http")
         public_base_url = ngrok_tunnel.public_url.rstrip("/")

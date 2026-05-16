@@ -1,0 +1,55 @@
+.header {
+  height: var(--header-h);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.brand { display: flex; align-items: center; gap: 9px; }
+
+.brandIcon {
+  width: 30px; height: 30px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px;
+}
+
+.brandTitle { font-size: 14px; font-weight: 600; }
+.brandSub   { font-size: 11px; color: var(--muted); }
+.spacer     { flex: 1; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; padding: 4px 12px; border-radius: 20px; font-weight: 500;
+}
+.badgeRunning { background: rgba(34,197,94,.15); color: var(--green); border: 1px solid rgba(34,197,94,.3); }
+.badgeIdle    { background: rgba(82,88,110,.2);  color: var(--text2); border: 1px solid var(--border2); }
+
+.dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--muted);
+}
+.dotRunning {
+  background: var(--green);
+  animation: pulse 1.4s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: .5; transform: scale(.85); }
+}
+
+.btn {
+  padding: 7px 16px; border-radius: 8px; font-size: 13px;
+  font-weight: 500; cursor: pointer; border: none; transition: opacity .15s;
+}
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btnPrimary  { background: var(--accent); color: #fff; }
+.btnPrimary:hover:not(:disabled) { opacity: .85; }
+.btnDisabled { background: var(--surface2); color: var(--text2); border: 1px solid var(--border2); }
+.btnGhost    { background: transparent; color: var(--text2); border: 1px solid var(--border2); }
+.btnGhost:hover { background: var(--surface2); }

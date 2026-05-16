@@ -1,0 +1,31 @@
+.wrap { display: flex; flex-direction: column; gap: 12px; }
+
+.section {
+  background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: var(--radius); overflow: hidden;
+}
+
+.title {
+  padding: 10px 14px; font-size: 12px; font-weight: 600;
+  color: var(--text2); background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+}
+
+.tag {
+  font-size: 10px; padding: 1px 6px; border-radius: 3px; font-weight: 700;
+}
+.tagOk   { background: rgba(34,197,94,.15); color: var(--green); }
+.tagFail { background: rgba(239,68,68,.15); color: var(--red); }
+
+.diff {
+  font-family: var(--mono); font-size: 12px; line-height: 1.6;
+  overflow-x: auto; padding: 10px 0; max-height: 260px; overflow-y: auto;
+}
+
+.line { display: block; padding: 0 14px; white-space: pre; }
+.add    { background: rgba(34,197,94,.1); color: #86efac; }
+.remove { background: rgba(239,68,68,.1); color: #fca5a5; }
+.hunk   { color: var(--accent); background: rgba(79,142,247,.08); }
+
+.reason { padding: 8px 14px; font-size: 12px; color: var(--text2); }
