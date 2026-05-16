@@ -10,12 +10,17 @@ Protocol notes:
   - After receiving conversation_initiation_metadata, a
     conversation_initiation_client_data acknowledgment MUST be sent before
     any user_message — some API versions will not respond without it.
+  - After the ack, ElevenLabs sends an automatic opening greeting which must
+    be drained before the first customer message is sent, otherwise the
+    greeting occupies the buffer and gets returned as the "response" to turn 1.
   - Ping events are answered immediately with pong.
   - Audio events are discarded: the agent always generates TTS server-side
     but we never consume it (text-mode simulation).
   - Two-layer timeout: _MSG_TIMEOUT per individual WebSocket frame,
     _TURN_TIMEOUT as an absolute deadline for one full agent response.
     This prevents both slow-webhook hangs and silent connection drops.
+  - Tentative filler responses ("...") are skipped — the agent emits these
+    while processing webhook calls; only substantive text is returned.
 """
 from __future__ import annotations
 
@@ -30,15 +35,22 @@ logger = logging.getLogger(__name__)
 
 _WS_BASE = "wss://api.elevenlabs.io/v1/convai/conversation"
 
-# Maximum wait for a single WebSocket frame.  Keeps the loop responsive to
-# connection drops without being too short for slow webhook round-trips.
+# Maximum wait for a single WebSocket frame.
 _MSG_TIMEOUT = 30.0
 
 # Hard ceiling for one complete agent turn (send → agent_response).
-# Webhook calls can be slow; 120 s is generous without hanging forever.
 _TURN_TIMEOUT = 120.0
 
 _CONNECT_TIMEOUT = 30.0
+
+# Responses that are pure filler while the agent is thinking / calling a webhook.
+# Returning these as real turns confuses the simulator customer LLM.
+_FILLER_RESPONSES = {"...", "…", ". . .", "...."}
+
+
+def _is_filler(text: str) -> bool:
+    stripped = text.strip()
+    return stripped in _FILLER_RESPONSES or set(stripped).issubset({".", " ", "…"})
 
 
 class ChatSession:
@@ -48,6 +60,7 @@ class ChatSession:
         self._agent_id = agent_id
         self._ws = None
         self.conversation_id: Optional[str] = None
+        self.opening_greeting: str = ""
 
     async def connect(self) -> None:
         import websockets
@@ -58,8 +71,6 @@ class ChatSession:
                 url,
                 additional_headers={"xi-api-key": ELEVENLABS_API_KEY},
                 open_timeout=_CONNECT_TIMEOUT,
-                # WebSocket-level keepalive: detects silent drops and sends
-                # automatic pings every 20 s, failing after 10 s with no pong.
                 ping_interval=20,
                 ping_timeout=10,
             ),
@@ -76,27 +87,60 @@ class ChatSession:
             )
         logger.debug("[WS] Session opened: %s", self.conversation_id)
 
-        # Required acknowledgment: tell the server we are ready and in text
-        # mode.  Without this frame, newer API versions may silently ignore
-        # subsequent user_message events.  optimize_streaming_latency=4 asks
-        # ElevenLabs to minimise audio buffering (less server-side work per
-        # audio frame, even though we discard those frames).
         await self._ws.send(json.dumps({
             "type": "conversation_initiation_client_data",
             "conversation_config_override": {
-                "tts": {
-                    "optimize_streaming_latency": 4,
-                },
+                "tts": {"optimize_streaming_latency": 4},
             },
         }))
+
+        # Drain the agent's automatic opening greeting.
+        # ElevenLabs agents send an agent_response immediately after the ack.
+        # If we don't consume it here it sits in the buffer and gets returned
+        # as the "response" to the customer's first message, making the agent
+        # appear to ignore everything the customer said.
+        self.opening_greeting = await self._drain_greeting()
+        logger.debug("[WS] Opening greeting: %.80s", self.opening_greeting)
+
+    async def _drain_greeting(self) -> str:
+        """
+        Read frames until the first real agent_response or a short timeout.
+        Returns the greeting text, or "" if none arrives within the window.
+        """
+        import websockets.exceptions
+        try:
+            deadline = asyncio.get_event_loop().time() + 15.0
+            while True:
+                remaining = deadline - asyncio.get_event_loop().time()
+                if remaining <= 0:
+                    return ""
+                raw = await asyncio.wait_for(self._ws.recv(), timeout=min(8.0, remaining))
+                msg = json.loads(raw)
+                msg_type = msg.get("type", "")
+
+                if msg_type == "ping":
+                    event_id = msg.get("ping_event", {}).get("event_id")
+                    await self._ws.send(json.dumps({"type": "pong", "event_id": event_id}))
+
+                elif msg_type == "agent_response":
+                    text = msg.get("agent_response_event", {}).get("agent_response", "")
+                    if text.strip() and not _is_filler(text):
+                        return text
+
+                elif msg_type == "error":
+                    raise RuntimeError(f"ElevenLabs agent error during greeting: {msg}")
+
+        except asyncio.TimeoutError:
+            return ""
+        except Exception:
+            return ""
 
     async def send(self, text: str) -> str:
         """
         Send a customer utterance and return the agent's text response.
 
-        Uses a deadline (_TURN_TIMEOUT) so the call always terminates, plus
-        a per-frame timeout (_MSG_TIMEOUT) to catch silent connection drops
-        early rather than waiting for the full deadline.
+        Filler responses ("...") are skipped — the agent emits these while
+        processing webhook calls; we wait for a substantive reply.
         """
         import websockets.exceptions
 
@@ -126,8 +170,6 @@ class ChatSession:
                     raise TimeoutError(
                         f"Agent did not complete its response within {_TURN_TIMEOUT}s"
                     )
-                # Per-frame timeout expired but turn deadline has time left —
-                # the connection is likely dead.
                 raise TimeoutError(
                     f"No WebSocket frame received for {_MSG_TIMEOUT}s — "
                     "connection may be dead or webhook is unresponsive"
@@ -146,10 +188,12 @@ class ChatSession:
 
             elif msg_type == "agent_response":
                 response = msg.get("agent_response_event", {}).get("agent_response", "")
-                if response.strip():
+                if response.strip() and not _is_filler(response):
                     logger.debug("[WS] Agent: %.80s", response)
                     return response
-                # Empty/whitespace response — wait for the substantive one.
+                # Filler or empty — keep waiting for the substantive response.
+                if response.strip():
+                    logger.debug("[WS] Skipping filler response: %r", response)
 
             elif msg_type == "error":
                 error_detail = msg.get("error", msg)

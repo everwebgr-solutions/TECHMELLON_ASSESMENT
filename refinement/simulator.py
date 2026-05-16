@@ -94,11 +94,25 @@ async def _run_conversation(
     # LLM sees: system prompt, then alternating user (=agent) / assistant (=customer)
     messages = [LLMMessage.system(system_prompt)]
 
+    # Include the agent's opening greeting in the transcript and LLM context
+    # so the customer LLM knows the agent already greeted them.
+    if session.opening_greeting:
+        transcript.append({"role": "agent", "content": session.opening_greeting, "timestamp": "0"})
+        if on_turn:
+            on_turn("agent", session.opening_greeting)
+
     try:
         for turn_num in range(1, MAX_CONVERSATION_TURNS + 1):
             # ── Customer turn ─────────────────────────────────────────────────
             if turn_num == 1:
-                messages.append(LLMMessage.user(_FIRST_TURN_PROMPT))
+                if session.opening_greeting:
+                    # Agent already greeted — customer responds to that greeting
+                    messages.append(LLMMessage.user(
+                        f"The agent greeted you: \"{session.opening_greeting}\"\n\n"
+                        f"Respond naturally and state your reason for calling."
+                    ))
+                else:
+                    messages.append(LLMMessage.user(_FIRST_TURN_PROMPT))
 
             raw_customer = llm.complete(messages)
             customer_text = _clean_llm_output(
