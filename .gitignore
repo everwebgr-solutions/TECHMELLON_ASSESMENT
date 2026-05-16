@@ -24,6 +24,7 @@ data/airline.db-wal
 
 # Logs (keep structure, ignore generated logs)
 logs/*.json
+logs/*.jsonl
 
 # Patches backup
 data/patches/backup/
