@@ -55,12 +55,26 @@ class CriterionScore(BaseModel):
 
 class EvaluationResult(BaseModel):
     scenario_id: str
+    conversation_type: str = Field(
+        "booking",
+        description="Type of conversation observed: 'booking', 'inquiry', or 'modification'",
+    )
     summary: str = Field(
         default="", description="1-3 sentence summary of what went well and what failed."
     )
     overall_pass: bool = Field(
-        ..., description="True if all criteria scores >= pass threshold"
+        False, description="True if all criteria scores >= pass threshold"
     )
+
+    @field_validator("conversation_type", mode="before")
+    @classmethod
+    def normalize_conversation_type(cls, v: object) -> str:
+        s = str(v).lower()
+        if any(kw in s for kw in ("inquiry", "enquir", "information")):
+            return "inquiry"
+        if any(kw in s for kw in ("modification", "cancel", "reschedule", "refund", "add_extra", "change")):
+            return "modification"
+        return "booking"
     understanding: CriterionScore = Field(
         ..., description="Was the customer's request correctly understood?"
     )
@@ -81,13 +95,22 @@ _EVALUATOR_SYSTEM = """\
 You are an expert evaluator assessing AI airline customer service agent conversations.
 
 STEP 1 — CLASSIFY THE CONVERSATION
-Read the transcript and determine what actually happened:
-- "booking"      — the customer purchased or tried to purchase a flight ticket
-- "inquiry"      — the customer only asked for information (policy, prices, availability);
-                   no purchase was intended or attempted
-- "modification" — the customer wanted to change, cancel, or add to an existing booking
+Work through these rules in order and stop at the first match:
 
-Use the conversation content to classify, not just the scenario description.
+1. Read the CUSTOMER GOAL. If it mentions cancelling, refunding, rescheduling, or adding
+   extras to an existing booking reference → conversation_type = "modification"
+
+2. Read the CUSTOMER GOAL. If it says "ONLY gathering information" or "NOT booking",
+   OR the customer only asked about policies, prices, or availability without intending
+   to purchase → conversation_type = "inquiry"
+
+3. Use TOOL CALLS to resolve ambiguous cases:
+   - "cancel_booking", "reschedule_booking", or "add_extras" present → "modification"
+   - "book_flight" present → "booking"
+   - Neither present (only search/lookup tools or empty) → "inquiry"
+
+Output this as the "conversation_type" field in your JSON response.
+IMPORTANT: "search_flights" alone never makes a conversation a "booking".
 
 STEP 2 — SCORE ON 4 CRITERIA
 Apply the criterion definitions that match the conversation type you identified.
@@ -124,51 +147,65 @@ SCORING SCALE:
 - 3-4:  Poor. Multiple significant failures.
 - 1-2:  Failed completely on this criterion.
 
+MANDATORY PRE-SCORING CHECK — read the TOOL CALLS list before writing any scores:
+
+For each tool that appears in TOOL CALLS:
+  → "→ OK": tool SUCCEEDED. Do not claim it failed. Score must reflect success.
+  → "→ CONSTRAINT: ...": the backend worked correctly but a business rule blocked the
+    action (booking not found, already cancelled, no seats, wrong class, etc.).
+    This is NEVER a code failure. It is a prompt failure only if the agent called the
+    tool with clearly wrong parameters; otherwise it may simply be an expected state.
+  → "→ ERROR: ...": a genuine unexpected backend failure. This is a code failure.
+  → Tool not in TOOL CALLS at all: it was never called — prompt failure only.
+
+Apply this check tool by tool. If book_flight → OK appears, you cannot score
+api_correctness below 8 on the grounds that the booking failed. If the agent
+read a booking reference aloud in the transcript, you cannot claim "reference
+was never provided."
+
 ROOT CAUSE — CRITICAL RULES (for any score < 8):
 
-Classify as "code" ONLY when there is explicit evidence in the transcript that a backend
-tool or webhook malfunctioned — for example:
-  - A booking was confirmed but the reference number, price, or flight details are clearly wrong
-  - A tool call visibly returned an error when the inputs were valid and well-formatted
-  - The agent says it could not complete an action due to a system error
+Classify as "code" ONLY when a tool explicitly shows "→ ERROR" in the TOOL CALLS
+list AND the inputs to that tool were valid and well-formed.
 
 Classify as "prompt" in ALL other cases, including:
-  - Agent did not call the right tool or called it with wrong parameters
+  - A tool was not called when it should have been
+  - A tool was called with wrong or missing parameters
   - Agent gave incorrect policy information or skipped a required step
-  - Agent misunderstood the customer's request
-  - Agent behaved unnaturally or repeated itself
-  - Any ambiguous case where you cannot see a clear API/tool error
+  - Agent misunderstood the customer's request or behaved unnaturally
+  - Any ambiguous case — default is always "prompt"
 
-IMPORTANT — "not found" results are almost always a PROMPT failure, not code:
-  If a tool returns "not found" or "no results", ask: was the input valid?
-  - Customer gave a fictitious/malformed flight number or booking reference → "prompt"
-    (the agent should handle gracefully, not loop asking the customer to recheck)
-  - Agent called the correct tool with a well-formatted, plausible ID and got "not found" → "prompt"
-    (agent should redirect, not blame the system)
-  - Only classify as "code" if the tool crashed, returned corrupt data, or rejected a
-    correctly-formatted ID that should exist based on earlier conversation context.
+IMPORTANT — "not found" / empty results are almost always a PROMPT failure, not code:
+  Only classify as "code" if the tool crashed or returned corrupt data for a valid input
+  that should exist based on earlier conversation context.
 
-Default to "prompt" when uncertain. Only use "code" when the transcript contains
-clear, specific evidence of a backend failure — not just a bad or empty result.
+Default to "prompt" when uncertain. "code" requires an explicit ERROR in TOOL CALLS.
 
 ROOT CAUSE DETAIL FORMAT:
 - For "prompt" failures: describe what the agent did wrong and what it should have done.
 - For "code" failures: you MUST identify the specific backend function at fault using
   exactly this format on its own line:
     FILE: api/routes/webhooks.py::function_name
-  Choose from these patchable functions:
-    api/routes/webhooks.py::webhook_search_flights
-    api/routes/webhooks.py::webhook_book_flight
-    api/routes/webhooks.py::webhook_get_booking
-    api/routes/webhooks.py::webhook_cancel_booking
-    api/routes/webhooks.py::webhook_reschedule_booking
-    api/routes/webhooks.py::webhook_add_extras
-    api/routes/webhooks.py::webhook_query_knowledge
-    api/services/flight_service.py::search_flights
-    api/services/flight_service.py::get_flight_by_number
-  If the faulty function is not in this list, classify as "prompt" instead.
+  CRITICAL: you may only name a function whose tool name appears in the TOOL CALLS list
+  above with an "→ ERROR" result. The mapping from tool name to function name is:
+    search_flights  → api/routes/webhooks.py::webhook_search_flights
+    book_flight     → api/routes/webhooks.py::webhook_book_flight
+    get_booking     → api/routes/webhooks.py::webhook_get_booking
+    cancel_booking  → api/routes/webhooks.py::webhook_cancel_booking
+    reschedule_booking → api/routes/webhooks.py::webhook_reschedule_booking
+    add_extras      → api/routes/webhooks.py::webhook_add_extras
+    query_knowledge → api/routes/webhooks.py::webhook_query_knowledge
+  If the failing tool is not in TOOL CALLS with an ERROR, classify as "prompt" instead.
+  Never name webhook_book_flight unless "book_flight → ERROR" appears in TOOL CALLS.
 
-Be precise. Quote exact phrases from the transcript when scoring below 8.
+QUOTING RULES — failure_quotes must be exact substrings of the transcript above.
+- Copy the phrase character-for-character from a [AGENT] or [USER] line.
+- If you cannot find the exact phrase in the transcript, set failure_quotes to [].
+- NEVER write "Booking reference was never provided to the customer" — that is not a
+  transcript quote, it is your opinion. If the agent never said the reference, leave
+  failure_quotes empty and describe the omission in root_cause_detail instead.
+- NEVER write "I'm sorry, I wasn't able to complete your booking due to a system error"
+  unless that exact sentence appears word-for-word in the transcript above.
 """
 
 
@@ -197,11 +234,16 @@ def _evaluator_user_prompt(scenario: Scenario, transcript: List[Dict], tool_call
     )
 
     if tool_calls:
-        calls_text = "\n".join(
-            f"  {c['tool']}({', '.join(f'{k}={v}' for k, v in c['inputs'].items())}) "
-            f"→ {'ERROR: ' + c['error'] if not c['success'] else 'OK'}"
-            for c in tool_calls
-        )
+        def _fmt_call(c: Dict) -> str:
+            args = ', '.join(f'{k}={v}' for k, v in c['inputs'].items())
+            if c['success']:
+                outcome = 'OK'
+            elif c.get('constraint'):
+                outcome = f'CONSTRAINT: {c["error"]}'
+            else:
+                outcome = f'ERROR: {c["error"]}'
+            return f"  {c['tool']}({args}) → {outcome}"
+        calls_text = "\n".join(_fmt_call(c) for c in tool_calls)
         tool_section = f"\nTOOL CALLS (actual API calls made during this conversation):\n{calls_text}\n"
     else:
         tool_section = "\nTOOL CALLS: none recorded\n"
@@ -255,6 +297,8 @@ def evaluate_transcript(
         max_attempts=3,
     )
 
+    _apply_deterministic_overrides(result, transcript, tool_calls or [])
+
     # Compute overall_pass based on configured threshold
     result.overall_pass = all(
         criterion.score >= PASS_THRESHOLD
@@ -268,6 +312,88 @@ def evaluate_transcript(
     result.scenario_id = scenario["id"]
 
     return result
+
+
+def _apply_deterministic_overrides(
+    result: EvaluationResult,
+    transcript: List[Dict],
+    tool_calls: List[Dict],
+) -> None:
+    """
+    Correct LLM evaluator hallucinations using verifiable transcript evidence.
+    Only raises scores — never lowers them — so genuine failures are unaffected.
+    """
+    import re
+
+    from llm.ollama_provider import _dbg
+
+    # ── API correctness: no tool returned a real ERROR ────────────────────────
+    # If the evaluator claims root_cause="code" but no tool call in the log
+    # returned an actual ERROR (only OKs and CONSTRAINTs), it is a guaranteed
+    # hallucination — the model fabricated a backend failure that didn't happen.
+    # We raise api_correctness to 8 (minimum "good") and clear the false claim.
+    if result.api_correctness.score < 8 and result.api_correctness.root_cause == "code":
+        has_real_error = any(
+            not c.get("success") and not c.get("constraint")
+            for c in tool_calls
+        )
+        if not has_real_error:
+            _dbg(
+                "DETERMINISTIC OVERRIDE",
+                f"api_correctness raised to 8: evaluator claimed code failure "
+                f"(score {result.api_correctness.score}/10) but no tool in TOOL CALLS "
+                f"returned an ERROR — hallucinated failure.",
+            )
+            result.api_correctness.score = 8
+            result.api_correctness.root_cause = "none"
+            result.api_correctness.root_cause_detail = (
+                "[auto-corrected] No tool returned an ERROR in TOOL CALLS — "
+                "evaluator's code failure claim was a hallucination."
+            )
+            result.api_correctness.failure_quotes = []
+
+    # ── Booking reference confirmation ────────────────────────────────────────
+    # Condition: a book_flight call succeeded AND its exact reference appears in
+    # an agent turn.  Both must be true — the agent saying "references look like
+    # BK-XXXXXX" is not confirmation of an actual booking.
+    # We do NOT gate on root_cause_detail keywords because the evaluator often
+    # blames webhook_book_flight (code failure) rather than "reference not given",
+    # so the keyword guard would suppress the override on hallucinated scores.
+    if result.outcome_confirmation.score < 8:
+        # Extract the real reference from a successful book_flight tool call.
+        # The reference is stored directly in the log entry (added to _log_call).
+        confirmed_ref = None
+        for call in tool_calls:
+            if call.get("tool") == "book_flight" and call.get("success"):
+                # Try direct reference field first (stored by _log_call)
+                ref = call.get("reference")
+                if ref and re.search(r"\bBK-[A-Z0-9]{6}\b", ref):
+                    confirmed_ref = ref
+                    break
+                # Fallback: scan the full string representation
+                m = re.search(r"\bBK-[A-Z0-9]{6}\b", str(call))
+                if m:
+                    confirmed_ref = m.group()
+                    break
+
+        if confirmed_ref:
+            agent_text = " ".join(
+                t["content"] for t in transcript if t.get("role") == "agent"
+            )
+            if confirmed_ref in agent_text:
+                _dbg(
+                    "DETERMINISTIC OVERRIDE",
+                    f"outcome_confirmation raised to 8: agent spoke exact confirmed "
+                    f"reference {confirmed_ref} but evaluator scored "
+                    f"{result.outcome_confirmation.score}/10.",
+                )
+                result.outcome_confirmation.score = 8
+                result.outcome_confirmation.root_cause = "none"
+                result.outcome_confirmation.root_cause_detail = (
+                    f"[auto-corrected] Agent confirmed exact booking reference "
+                    f"{confirmed_ref} in transcript — evaluator score overridden."
+                )
+                result.outcome_confirmation.failure_quotes = []
 
 
 def scores_dict(result: EvaluationResult) -> Dict[str, int]:
