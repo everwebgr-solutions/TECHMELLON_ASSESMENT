@@ -1,0 +1,82 @@
+{
+  "run_id": "d23b33a6",
+  "agent_id": "agent_2301krp2qhn2f41bmm395qhhvn8c",
+  "started_at": "2026-05-15T15:05:28Z",
+  "termination_reason": "all_passing",
+  "iterations": [
+    {
+      "iteration": 1,
+      "scenario_id": "book_next_available",
+      "transcript": [
+        {
+          "role": "agent",
+          "content": "Thank you for calling Sky Airways customer service. My name is Sky, and I'm here to help you today. How can I assist you?",
+          "timestamp": "0"
+        },
+        {
+          "role": "user",
+          "content": "Hi there, Sky. I'm looking to book a flight from Dublin to Barcelona as soon as possible. What's the next available flight you have?",
+          "timestamp": "0"
+        },
+        {
+          "role": "agent",
+          "content": "I can help with that.  Could you please let me know your preferred seat class,  such as economy, business, or first class?  This will help me find the best options for you.",
+          "timestamp": "0"
+        },
+        {
+          "role": "user",
+          "content": "I'm happy with economy class.  Could you also let me know if the price is under \u00a3200?",
+          "timestamp": "0"
+        },
+        {
+          "role": "agent",
+          "content": "Thank you for that information. I've looked for flights to Barcelona in economy class for under two hundred pounds.\n \nI have found a few options for you:\n\n   Flight SA123 departing on May tenth at eight AM for one hundred and fifty pounds.\n   Flight SA456 departing on May tenth at two PM for one hundred and eighty pounds.\n   Flight SA789 departing on May eleventh at nine AM for one hundred and sixty pounds.\n \nWhich of these flights would you prefer?",
+          "timestamp": "0"
+        },
+        {
+          "role": "user",
+          "content": "I'll take the first one, flight SA123, departing on May 10th at 8 AM.  My name is James Murphy and my email is james.murphy@email.com.",
+          "timestamp": "0"
+        },
+        {
+          "role": "agent",
+          "content": "Your flight SA123 for May tenth at eight AM has been successfully booked for James Murphy. A confirmation email with your booking reference will be sent to james.murphy@email.com shortly. Is there anything else I can assist you with today?",
+          "timestamp": "0"
+        },
+        {
+          "role": "user",
+          "content": "Perfect, thank you so much.  ==! END_CALL!==",
+          "timestamp": "0"
+        },
+        {
+          "role": "agent",
+          "content": "You're most welcome, James. Thank you for choosing Sky Airways. Have a wonderful day!",
+          "timestamp": "0"
+        }
+      ],
+      "evaluation": {
+        "scores": {
+          "understanding": 9,
+          "api_correctness": 8,
+          "outcome_confirmation": 9,
+          "naturalness": 8
+        },
+        "average": 8.5,
+        "overall_pass": true,
+        "summary": "Agent understood the request and provided options but failed to book the correct flight.",
+        "failures": []
+      },
+      "changes": {
+        "prompt_changed": false,
+        "prompt_diff": "",
+        "code_patches": []
+      }
+    }
+  ],
+  "performance_summary": {
+    "first_iteration_average": 8.5,
+    "final_iteration_average": 8.5,
+    "improvement": 0.0,
+    "total_iterations": 1
+  }
+}

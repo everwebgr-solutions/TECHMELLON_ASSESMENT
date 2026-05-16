@@ -1,0 +1,253 @@
+{
+  "run_id": "345e871e",
+  "agent_id": "agent_9001krph6r0aefjahdr7x3696xa4",
+  "started_at": "2026-05-15T19:18:26Z",
+  "termination_reason": null,
+  "iterations": [
+    {
+      "iteration": 1,
+      "scenario_id": "book_next_available",
+      "transcript": [
+        {
+          "role": "user",
+          "content": "Hi, I'm calling because I'd like to book a flight from Dublin to Barcelona as soon as possible, could you please let me know when the next available flight is?",
+          "timestamp": "1"
+        },
+        {
+          "role": "agent",
+          "content": "Thank you for calling Sky Airways customer service. My name is Sky, and I'm here to help you today. How can I assist you?",
+          "timestamp": "1"
+        },
+        {
+          "role": "user",
+          "content": "Hi Sky, my name's James Murphy, nice to talk to you. I'd like to fly from Dublin to Barcelona, and I was wondering if there's a flight available within the next day or two, I'm looking for something as soon as possible.",
+          "timestamp": "2"
+        },
+        {
+          "role": "agent",
+          "content": "Nice to talk to you too, James. Let me check the available flights from Dublin to Barcelona for the next couple of days. Please hold on for a moment.",
+          "timestamp": "2"
+        },
+        {
+          "role": "user",
+          "content": "No worries at all, Sky. I appreciate your help with this. Can I just confirm that you'll be looking at economy class options for me, and please let me know when the next available flight is, even if it's in a couple of days time?",
+          "timestamp": "3"
+        },
+        {
+          "role": "agent",
+          "content": "Yes, James, I can confirm I'll be looking for economy class options for you. The next available flight from Dublin to Barcelona is on May fifteenth, two thousand twenty-six, departing at six thirty AM. The price for an economy seat is one hundred forty-nine pounds.",
+          "timestamp": "3"
+        },
+        {
+          "role": "user",
+          "content": "That sounds okay, but I was hoping maybe there might be something a bit sooner than that. Is it possible to check if there are any earlier flights available, even if they're not until tomorrow or the day after? And also, just to confirm, can you please tell me what the total cost would be for this flight, including any additional fees I might incur?",
+          "timestamp": "4"
+        },
+        {
+          "role": "agent",
+          "content": "James, the flights I found for May fifteenth, two thousand twenty-six, are currently the earliest available options from Dublin to Barcelona in economy class. The price I quoted, one hundred forty-nine pounds, is for the flight ticket itself. Any additional fees, such as for checked bags or specific seat preferences, would be added separately if you choose to include them.\n\nWould you like to proceed with booking the flight on May fifteenth, two thousand twenty-six, or would you like me to check for flights on a different date?",
+          "timestamp": "4"
+        },
+        {
+          "role": "user",
+          "content": "I think I'll give it a go. The price of \u00a3149 is actually quite reasonable, so I'd be happy to book that flight if it's available. Can I just confirm my details real quick - would I need to pay by card now, or could I wait until later to settle the payment?",
+          "timestamp": "5"
+        },
+        {
+          "role": "agent",
+          "content": "James, to confirm, you'd like to book flight AX154 from Dublin to Barcelona, departing on May fifteenth, two thousand and twenty-six at six thirty AM, for one hundred and forty-nine pounds in economy class.\n\nTo proceed with the booking, I will need your full name and email address. Regarding payment, it is typically processed at the time of booking.",
+          "timestamp": "5"
+        },
+        {
+          "role": "user",
+          "content": "That sounds good, Sky. My full name is James Murphy, and my email address is james.murphy@email.com. And yeah, I'll just go ahead with paying for the booking now, if that's okay with you. Can you please confirm when the payment will be processed and whether there are any other steps I need to take?",
+          "timestamp": "6"
+        },
+        {
+          "role": "agent",
+          "content": "Your booking is confirmed, James. The total cost is one hundred forty-nine pounds, and the payment has been processed. Your booking reference is BK-5DC9AD. You should receive a confirmation email shortly. If there's anything else you need, feel free to ask!",
+          "timestamp": "6"
+        },
+        {
+          "role": "user",
+          "content": "Perfect, thank you so much! I really appreciate your help in getting me booked on that flight. Is there anything else I can do now, or have I completed the process successfully?",
+          "timestamp": "7"
+        }
+      ],
+      "evaluation": {
+        "scores": {
+          "understanding": 6,
+          "api_correctness": 3,
+          "outcome_confirmation": 8,
+          "naturalness": 9
+        },
+        "average": 6.5,
+        "overall_pass": false,
+        "summary": "Agent did not provide alternative earlier flights and failed to calculate total cost with additional fees.",
+        "failures": [
+          {
+            "criterion": "understanding",
+            "score": 6,
+            "root_cause": "prompt",
+            "detail": "Agent did not provide alternative earlier flights",
+            "quotes": [
+              "James, the flights I found for May fifteenth, two thousand twenty-six, are currently the earliest available options from Dublin to Barcelona in economy class."
+            ]
+          },
+          {
+            "criterion": "api_correctness",
+            "score": 3,
+            "root_cause": "code",
+            "detail": "Agent failed to calculate total cost with additional fees",
+            "quotes": [
+              "The price I quoted, one hundred forty-nine pounds, is for the flight ticket itself. Any additional fees, such as for checked bags or specific seat preferences, would be added separately if you choose to include them."
+            ]
+          }
+        ]
+      },
+      "changes": {
+        "prompt_changed": true,
+        "prompt_diff": "--- prompt_before+++ prompt_after@@ -38,10 +38,11 @@ 1. Ask for the booking reference.\n 2. Call get_booking to retrieve current booking details.\n 3. Search for alternative flights on the customer's preferred date (call search_flights with the provided destination).\n-4. Confirm if the customer's preferred flight is available.\n-5. If confirmed, present options and confirm the customer's choice.\n-6. Call reschedule_booking with the new flight ID.\n-7. Confirm the change.\n+4. If no preferred flight is available, offer alternative options.\n+5. Confirm if the customer's preferred flight is available.\n+6. If confirmed, present options and confirm the customer's choice.\n+7. Call reschedule_booking with the new flight ID.\n+8. Confirm the change.\n \n ### Cancellations and Refunds\n 1. Retrieve the booking with get_booking.\n",
+        "code_patches": [
+          {
+            "file": "api/routes/webhooks.py",
+            "function": "webhook_search_flights",
+            "success": false,
+            "reason": "Tests failed after patch \u2014 rolled back to backup",
+            "diff": ""
+          }
+        ]
+      }
+    },
+    {
+      "iteration": 2,
+      "scenario_id": "cheapest_ticket",
+      "transcript": [
+        {
+          "role": "user",
+          "content": "Hello, my name is Sarah Chen and I'm calling because I need to find a cheap flight for next week. I'm on a tight budget and was wondering if you could help me find the cheapest option available anywhere within the next seven days?",
+          "timestamp": "1"
+        },
+        {
+          "role": "agent",
+          "content": "Thank you for calling Sky Airways customer service. My name is Sky, and I'm here to help you today. How can I assist you?",
+          "timestamp": "1"
+        },
+        {
+          "role": "user",
+          "content": "Hi Sky, thank you for taking my call. I was wondering if you could check on some flights that are available for next week, maybe from different airports or destinations, and see what your cheapest options would be?",
+          "timestamp": "2"
+        },
+        {
+          "role": "agent",
+          "content": "Hello Sarah, I can certainly help you find some cheap flight options for next week. To do this, I'll need to know your desired destination. Do you have a specific place in mind, or are you open to suggestions for the cheapest available flights?",
+          "timestamp": "2"
+        },
+        {
+          "role": "user",
+          "content": "I'm actually not set on a particular destination, Sky, so feel free to suggest some of the most affordable options. I'd be happy to consider any airport or city that's reasonably priced. Can you show me your top picks for cheap flights from anywhere in the next week?",
+          "timestamp": "3"
+        },
+        {
+          "role": "agent",
+          "content": "To find the best options for you, could you please let me know your departure city or airport? This will help me search for the most affordable flights available from your location.",
+          "timestamp": "3"
+        },
+        {
+          "role": "user",
+          "content": "I'm flying out of London Heathrow Airport. Can I also confirm that you'll be looking at one-way flights, and are there any restrictions on how early you can book in order to find the cheapest prices?",
+          "timestamp": "4"
+        },
+        {
+          "role": "agent",
+          "content": "Thank you for confirming London Heathrow as your departure airport, Sarah. To find the cheapest flights, I'll need a destination to search for. Would you like me to look into some popular destinations, or do you have a few in mind?\n\nRegarding one-way flights, my search tool doesn't specifically filter for them, but I can certainly look for flights on a single date for you. As for restrictions on booking early for the cheapest prices, I can only search for currently available flights and don't have information on specific booking policies for price optimization.",
+          "timestamp": "4"
+        },
+        {
+          "role": "user",
+          "content": "That's completely fine, Sky. Actually, if it's not too much trouble, could you just show me some of your top picks for destinations that are likely to be relatively cheap from London Heathrow? Maybe something in Eastern Europe or a European city that's not too pricey?",
+          "timestamp": "5"
+        },
+        {
+          "role": "agent",
+          "content": "I understand you're looking for affordable options from London Heathrow. While I can search for flights to specific destinations, I can't search for flights to \"anywhere\" or \"any cheap European city\" without a destination in mind.\n\nWould you like me to check for flights to a few popular and generally affordable European cities like Dublin, Berlin, Warsaw, Budapest, or Prague? Or do you have a specific destination you'd like me to look into?",
+          "timestamp": "5"
+        },
+        {
+          "role": "user",
+          "content": "Actually, that sounds perfect, Sky. I think any of those cities would be a good starting point. Could you please check for flights to Dublin and Berlin, as they seem relatively affordable from London Heathrow?",
+          "timestamp": "6"
+        },
+        {
+          "role": "agent",
+          "content": "Certainly, Sarah. I can look for flights to Dublin and Berlin for you from London Heathrow. I will search for the cheapest options available within the next seven days.\n",
+          "timestamp": "6"
+        },
+        {
+          "role": "user",
+          "content": "Thank you so much, Sky. Just a quick question - what's included in these prices? Are they just the ticket cost, or does that include any additional fees such as baggage allowance or food on board?",
+          "timestamp": "7"
+        }
+      ],
+      "evaluation": {
+        "scores": {
+          "understanding": 7,
+          "api_correctness": 5,
+          "outcome_confirmation": 6,
+          "naturalness": 8
+        },
+        "average": 6.5,
+        "overall_pass": false,
+        "summary": "Agent understood the request but failed to complete the booking and confirm the reference.",
+        "failures": [
+          {
+            "criterion": "understanding",
+            "score": 7,
+            "root_cause": "prompt",
+            "detail": "Agent did not call search_flights after getting destination",
+            "quotes": [
+              "Agent asked for destination twice without searching"
+            ]
+          },
+          {
+            "criterion": "api_correctness",
+            "score": 5,
+            "root_cause": "code",
+            "detail": "book_flight tool was not called",
+            "quotes": [
+              "No booking was made despite customer agreeing to proceed"
+            ]
+          },
+          {
+            "criterion": "outcome_confirmation",
+            "score": 6,
+            "root_cause": "prompt",
+            "detail": "Agent ended call without confirming booking reference",
+            "quotes": [
+              "Booking reference was never provided to the customer"
+            ]
+          }
+        ]
+      },
+      "changes": {
+        "prompt_changed": false,
+        "prompt_diff": "",
+        "code_patches": [
+          {
+            "file": "api/routes/webhooks.py",
+            "function": "webhook_search_flights",
+            "success": false,
+            "reason": "Tests failed after patch \u2014 rolled back to backup",
+            "diff": ""
+          }
+        ]
+      }
+    }
+  ],
+  "performance_summary": {
+    "first_iteration_average": 6.5,
+    "final_iteration_average": 6.5,
+    "improvement": 0.0,
+    "total_iterations": 2
+  }
+}

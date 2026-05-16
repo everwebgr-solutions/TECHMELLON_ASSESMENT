@@ -1,0 +1,92 @@
+{
+  "run_id": "3d4315fe",
+  "agent_id": "agent_4801krp38y5hfz2ayvmrwgb5nzga",
+  "started_at": "2026-05-15T15:14:58Z",
+  "termination_reason": "all_passing",
+  "iterations": [
+    {
+      "iteration": 1,
+      "scenario_id": "book_next_available",
+      "transcript": [
+        {
+          "role": "agent",
+          "content": "Thank you for calling Sky Airways customer service. My name is Sky, and I'm here to help you today. How can I assist you?",
+          "timestamp": "0"
+        },
+        {
+          "role": "user",
+          "content": "Hi Sky, I'm looking to book a flight from Dublin to Barcelona as soon as possible.  I'm flexible with the time but would like the earliest available flight.  I'm interested in economy class.  Could you let me know the next available flight and the price?",
+          "timestamp": "0"
+        },
+        {
+          "role": "agent",
+          "content": "Certainly, I can help you with that. You're looking for an economy class flight from Dublin to Barcelona as soon as possible. Let me check for the earliest available flight for you.\n",
+          "timestamp": "0"
+        },
+        {
+          "role": "agent",
+          "content": "I found the earliest available economy class flight from Dublin to Barcelona.  Could you please confirm if you would like to proceed with booking this flight,  and provide your full name and email address for the booking?",
+          "timestamp": "0"
+        },
+        {
+          "role": "user",
+          "content": "Yes, please.  My name is James Murphy and my email is james.murphy@email.com. What's the price of that flight?",
+          "timestamp": "0"
+        },
+        {
+          "role": "agent",
+          "content": "Thank you, James.  The price for the earliest available economy class flight from Dublin to Barcelona is two hundred pounds.  I will proceed with booking this flight for you.",
+          "timestamp": "0"
+        },
+        {
+          "role": "agent",
+          "content": "Your flight to Barcelona has been booked, James. Your booking reference is BK-seven-six-five-four-three-two-one. Is there anything else I can assist you with today?",
+          "timestamp": "0"
+        },
+        {
+          "role": "user",
+          "content": "Perfect, thank you so much.",
+          "timestamp": "0"
+        },
+        {
+          "role": "agent",
+          "content": "You're most welcome, James.  Is there anything else I can help you with today regarding your flight or any other Sky Airways services?",
+          "timestamp": "0"
+        },
+        {
+          "role": "user",
+          "content": "No, that's all for now.  Thanks again.  Goodbye!  ==! END_CALL!==",
+          "timestamp": "0"
+        },
+        {
+          "role": "agent",
+          "content": "Thank you for calling Sky Airways. Have a wonderful day!  Goodbye.",
+          "timestamp": "0"
+        }
+      ],
+      "evaluation": {
+        "scores": {
+          "understanding": 9,
+          "api_correctness": 8,
+          "outcome_confirmation": 9,
+          "naturalness": 8
+        },
+        "average": 8.5,
+        "overall_pass": true,
+        "summary": "Agent understood the request and confirmed booking details.",
+        "failures": []
+      },
+      "changes": {
+        "prompt_changed": false,
+        "prompt_diff": "",
+        "code_patches": []
+      }
+    }
+  ],
+  "performance_summary": {
+    "first_iteration_average": 8.5,
+    "final_iteration_average": 8.5,
+    "improvement": 0.0,
+    "total_iterations": 1
+  }
+}

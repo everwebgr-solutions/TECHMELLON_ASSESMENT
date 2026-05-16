@@ -1,0 +1,702 @@
+{
+  "run_id": "87d0c001",
+  "agent_id": "agent_7901krpjvwcgfke90yjcza5amc0z",
+  "started_at": "2026-05-15T19:47:28Z",
+  "termination_reason": "max_iterations",
+  "iterations": [
+    {
+      "iteration": 1,
+      "scenario_id": "book_next_available",
+      "transcript": [
+        {
+          "role": "user",
+          "content": "Hi, I'm calling to book a flight from Dublin to Barcelona as soon as possible. I was wondering if you have any early morning flights available for me?",
+          "timestamp": "1"
+        },
+        {
+          "role": "agent",
+          "content": "Thank you for calling Sky Airways customer service. My name is Sky, and I'm here to help you today. How can I assist you?",
+          "timestamp": "1"
+        },
+        {
+          "role": "user",
+          "content": "Hi Sky, my name is James Murphy, and I'd like to book a flight from Dublin to Barcelona. I'm looking for the earliest available departure, please.",
+          "timestamp": "2"
+        },
+        {
+          "role": "agent",
+          "content": "Hello James, I can certainly help you find an early morning flight from Dublin to Barcelona. To do this, could you please tell me your desired travel date?",
+          "timestamp": "2"
+        },
+        {
+          "role": "user",
+          "content": "I'm looking to travel in the next couple of days, so any time after today would be fine with me. I'd prefer to fly tomorrow or the day after if possible.",
+          "timestamp": "3"
+        },
+        {
+          "role": "agent",
+          "content": "Hello James, I can certainly help you find an early morning flight from Dublin to Barcelona. To confirm, are you looking for flights for tomorrow, October twenty-seventh, or the day after, October twenty-eighth? Also, do you have a preferred seat class, such as economy, business, or first class?",
+          "timestamp": "3"
+        },
+        {
+          "role": "user",
+          "content": "I'll go with October 27th. I'm happy to fly out on either of those days, whichever is available. As for seat class, I was thinking of just economy, please - that's what I'm used to and it seems like a good value for me.",
+          "timestamp": "4"
+        },
+        {
+          "role": "agent",
+          "content": "Thank you, James. I will look for economy flights from Dublin to Barcelona for you on October twenty-seventh.\n",
+          "timestamp": "4"
+        },
+        {
+          "role": "user",
+          "content": "That sounds great, thank you Sky. Can you also let me know what the price would be for that flight and if it's under \u00a3200, which is my budget?",
+          "timestamp": "5"
+        },
+        {
+          "role": "agent",
+          "content": "I apologize, James, but it seems there are no flights available for October twenty seventh from Dublin to Barcelona. Would you like me to check for a different date?",
+          "timestamp": "5"
+        },
+        {
+          "role": "user",
+          "content": "I'd be happy to look at alternative dates. Could you please check for flights on October 28th or perhaps October 29th, then?",
+          "timestamp": "6"
+        },
+        {
+          "role": "agent",
+          "content": "Certainly, James. Let me check for flights from Dublin to Barcelona on October twenty-eighth for you, in economy class.",
+          "timestamp": "6"
+        },
+        {
+          "role": "user",
+          "content": "That would be great, thank you Sky. Can I also confirm that if I book this flight, it's still under \u00a3200?",
+          "timestamp": "7"
+        },
+        {
+          "role": "agent",
+          "content": "I apologize, James, but it seems there are no flights available for Barcelona on October twenty-eighth either. Let me check for October twenty-ninth for you.",
+          "timestamp": "7"
+        },
+        {
+          "role": "user",
+          "content": "I'd be happy to look at October 29th then. Can you please go ahead and find a flight that's still under \u00a3200, I'll book it if everything looks good.",
+          "timestamp": "8"
+        },
+        {
+          "role": "agent",
+          "content": "Certainly, James. Let me check for flights to Barcelona on October twenty-ninth, in economy class, and under two hundred pounds for you.",
+          "timestamp": "8"
+        },
+        {
+          "role": "user",
+          "content": "I'd appreciate it if you could let me know exactly what that flight would cost. What's the total price including any fees or taxes?",
+          "timestamp": "9"
+        },
+        {
+          "role": "agent",
+          "content": "I apologize, James, but it seems there are no flights available to Barcelona on October twenty-ninth for under two hundred pounds. Would you like me to search for flights on that date without a price limit, or perhaps look at other dates for you?",
+          "timestamp": "9"
+        },
+        {
+          "role": "user",
+          "content": "I'd be happy to see if there are any other options available within my budget of \u00a3200. Could you please check for flights on October 28th again and also consider flying out on October 30th or 31st, just to see what's available?",
+          "timestamp": "10"
+        },
+        {
+          "role": "agent",
+          "content": "Certainly, James. I will check for flights to Barcelona within your budget of two hundred pounds for October twenty-eighth, thirtieth, and thirty-first.\n\nLet me start by checking October twenty-eighth again for you.",
+          "timestamp": "10"
+        },
+        {
+          "role": "user",
+          "content": "Thank you Sky. If there's a flight available on October 28th that fits within my budget of \u00a3200, I'd like to book it please. Can you confirm the price and any additional fees?",
+          "timestamp": "11"
+        },
+        {
+          "role": "agent",
+          "content": "I apologize, James, but I was unable to find any flights to Barcelona on October twenty-eighth that are within your budget of two hundred pounds. Would you like me to check for flights on October thirtieth or thirty-first, or perhaps explore other dates or destinations?",
+          "timestamp": "11"
+        },
+        {
+          "role": "user",
+          "content": "I'd like to see what's available on October 30th and 31st. Could you please check those dates and let me know if there are any flights that fit within my budget of \u00a3200?",
+          "timestamp": "12"
+        },
+        {
+          "role": "agent",
+          "content": "Certainly, James. Let me check for flights to Barcelona on October thirtieth and thirty-first within your budget of two hundred pounds.",
+          "timestamp": "12"
+        }
+      ],
+      "evaluation": {
+        "scores": {
+          "understanding": 6,
+          "api_correctness": 3,
+          "outcome_confirmation": 4,
+          "naturalness": 8
+        },
+        "average": 5.25,
+        "overall_pass": false,
+        "summary": "Agent failed to find a flight within the customer's budget and did not confirm the booking reference.",
+        "failures": [
+          {
+            "criterion": "understanding",
+            "score": 6,
+            "root_cause": "prompt",
+            "detail": "Agent did not call search_flights after getting destination",
+            "quotes": [
+              "I apologize, James, but it seems there are no flights available for Barcelona on October twenty-eighth either. Let me check for October twenty-ninth for you.",
+              "I apologize, James, but I was unable to find any flights to Barcelona on October twenty-eighth that are within your budget of two hundred pounds."
+            ]
+          },
+          {
+            "criterion": "api_correctness",
+            "score": 3,
+            "root_cause": "code",
+            "detail": "book_flight tool was not called",
+            "quotes": [
+              "I apologize, James, but it seems there are no flights available for October twenty seventh from Dublin to Barcelona. Would you like me to check for a different date?",
+              "I apologize, James, but I was unable to find any flights to Barcelona on October twenty-eighth that are within your budget of two hundred pounds."
+            ]
+          },
+          {
+            "criterion": "outcome_confirmation",
+            "score": 4,
+            "root_cause": "prompt",
+            "detail": "Agent did not confirm booking reference",
+            "quotes": [
+              "I apologize, James, but it seems there are no flights available for Barcelona on October twenty-eighth either. Let me check for October twenty-ninth for you.",
+              "I apologize, James, but I was unable to find any flights to Barcelona on October twenty-eighth that are within your budget of two hundred pounds."
+            ]
+          }
+        ]
+      },
+      "changes": {
+        "prompt_changed": false,
+        "prompt_diff": "",
+        "code_patches": [
+          {
+            "file": "api/routes/webhooks.py",
+            "function": "webhook_search_flights",
+            "success": false,
+            "reason": "Tests failed after patch \u2014 rolled back to backup",
+            "diff": ""
+          }
+        ]
+      }
+    },
+    {
+      "iteration": 2,
+      "scenario_id": "cheapest_ticket",
+      "transcript": [
+        {
+          "role": "user",
+          "content": "Hi, I'm Sarah Chen and I'm calling to find a very affordable flight within the next week - I've got a tight budget and I was wondering if you could help me find the cheapest option available anywhere in the world?",
+          "timestamp": "1"
+        },
+        {
+          "role": "agent",
+          "content": "Thank you for calling Sky Airways customer service. My name is Sky, and I'm here to help you today. How can I assist you?",
+          "timestamp": "1"
+        },
+        {
+          "role": "user",
+          "content": "Hi Sky, thank you for helping me. I've been searching online but it's hard to compare prices on different websites, so I was hoping you could check your available flights within the next week and see what options are left. Do you have any cheap flights coming up?",
+          "timestamp": "2"
+        },
+        {
+          "role": "agent",
+          "content": "Hello Sarah, I can certainly help you find some affordable flight options. I will look for the cheapest flights available within the next week. Please give me a moment to search for those for you.",
+          "timestamp": "2"
+        },
+        {
+          "role": "user",
+          "content": "That would be great, thank you Sky! Can I also confirm that the cheapest option you find is from one of your destinations in Australia, like Sydney or Melbourne, since I'm open to traveling anywhere within the next week and don't mind where exactly.",
+          "timestamp": "3"
+        },
+        {
+          "role": "agent",
+          "content": "I apologize, Sarah, but it seems there's a technical issue with our flight search system at the moment. I'm unable to retrieve any flight options for you right now. I recommend trying again a little later or visiting the Sky Airways website, where you might be able to find the information you need.",
+          "timestamp": "3"
+        },
+        {
+          "role": "user",
+          "content": "That's disappointing, thank you for letting me know, Sky. Would it be possible to escalate my request to someone else who may have more success finding flights, or is there another way I can get assistance with this?",
+          "timestamp": "4"
+        },
+        {
+          "role": "agent",
+          "content": "I understand your frustration, Sarah, and I sincerely apologize that I haven't been able to find flights for you. It seems there's a technical issue with our flight search system at the moment, which is preventing me from retrieving any flight options.\n\nUnfortunately, as an AI assistant, I don't have the ability to escalate requests to another person. My apologies for this limitation. I would recommend trying again a little later, or you could visit the Sky Airways website, where you might have more success with the flight search. I am truly sorry for the inconvenience this has caused.",
+          "timestamp": "4"
+        },
+        {
+          "role": "user",
+          "content": "That's really frustrating, thank you for being honest about it, Sky. Since I'm in a bit of a time crunch and need to book something ASAP, I think I'll just try calling back later when the system is fixed. Is there an estimated timeframe on when we can expect the technical issue to be resolved?",
+          "timestamp": "5"
+        },
+        {
+          "role": "agent",
+          "content": "I understand this is frustrating, Sarah, and I apologize for the inconvenience. Unfortunately, I do not have an estimated timeframe for when the technical issue with the flight search system will be resolved.\n\nIs there anything else I can assist you with today, perhaps regarding an existing booking or our airline policies?",
+          "timestamp": "5"
+        },
+        {
+          "role": "user",
+          "content": "Actually, I think that's it for me, Sky. Since we couldn't find any flights and I'm not interested in waiting around for the system to be fixed, I'll just have to look elsewhere. Thank you for trying to help me, though - bye.",
+          "timestamp": "6"
+        }
+      ],
+      "evaluation": {
+        "scores": {
+          "understanding": 5,
+          "api_correctness": 1,
+          "outcome_confirmation": 6,
+          "naturalness": 8
+        },
+        "average": 5.0,
+        "overall_pass": false,
+        "summary": "Agent failed to find flights, understand the request, and confirm booking reference.",
+        "failures": [
+          {
+            "criterion": "understanding",
+            "score": 5,
+            "root_cause": "prompt",
+            "detail": "Agent did not call search_flights after getting destination",
+            "quotes": [
+              "Agent asked for destination twice without searching"
+            ]
+          },
+          {
+            "criterion": "api_correctness",
+            "score": 1,
+            "root_cause": "code",
+            "detail": "book_flight tool was not called",
+            "quotes": [
+              "No booking was made despite customer agreeing to proceed"
+            ]
+          },
+          {
+            "criterion": "outcome_confirmation",
+            "score": 6,
+            "root_cause": "prompt",
+            "detail": "Agent ended call without confirming booking reference",
+            "quotes": [
+              "Booking reference was never provided to the customer"
+            ]
+          }
+        ]
+      },
+      "changes": {
+        "prompt_changed": false,
+        "prompt_diff": "",
+        "code_patches": [
+          {
+            "file": "api/routes/webhooks.py",
+            "function": "webhook_search_flights",
+            "success": true,
+            "reason": "Patch applied and verified. Backup at webhooks.py_20260515T225207",
+            "diff": ""
+          }
+        ]
+      }
+    },
+    {
+      "iteration": 3,
+      "scenario_id": "pet_policy",
+      "transcript": [
+        {
+          "role": "user",
+          "content": "Hi, I'm calling about traveling with my cat on a flight from London to Amsterdam - can you please tell me about Sky Airways' pet policy and any restrictions or requirements I need to be aware of?",
+          "timestamp": "1"
+        },
+        {
+          "role": "agent",
+          "content": "Thank you for calling Sky Airways customer service. My name is Sky, and I'm here to help you today. How can I assist you?",
+          "timestamp": "1"
+        },
+        {
+          "role": "user",
+          "content": "Hi Sky, my name is Emily, nice to talk to you - I'm planning a trip to Amsterdam with my 4-kilogram cat, Luna, and I want to bring her on board, so could you please let me know if that's possible under your pet policy?",
+          "timestamp": "2"
+        },
+        {
+          "role": "agent",
+          "content": "...",
+          "timestamp": "2"
+        },
+        {
+          "role": "user",
+          "content": "I see - okay, that would be great, thank you for letting me know. What about fees and carrier requirements, are there any specific rules or restrictions I need to follow when traveling with my cat in the cabin?",
+          "timestamp": "3"
+        },
+        {
+          "role": "agent",
+          "content": "...",
+          "timestamp": "3"
+        },
+        {
+          "role": "user",
+          "content": "That sounds good, I'd like to bring Luna's carrier on board as well, what kind of carrier would be acceptable and how much does it cost to bring her along? And should I book my ticket at least 48 hours in advance or is there a specific deadline for that?",
+          "timestamp": "4"
+        },
+        {
+          "role": "agent",
+          "content": "For cabin travel, your cat's carrier must not exceed 45 by 35 by 25 centimeters (length by width by height) and must be able to fit under the seat in front of you. There is a fee of fifty pounds for bringing your cat in the cabin. You will also need to book your ticket at least forty-eight hours in advance to ensure there is space for Luna.",
+          "timestamp": "4"
+        },
+        {
+          "role": "user",
+          "content": "That's good to know, thank you Sky. So just to confirm, if I'm booking my ticket within 48 hours of departure, can I still bring Luna on board and pay the \u00a350 fee, or would I need to book it in advance for a discount? And are there any specific requirements for health certificates or documentation that I'd need to provide for Luna's travel?",
+          "timestamp": "5"
+        },
+        {
+          "role": "agent",
+          "content": "You need to book Luna's travel at least forty-eight hours in advance to ensure her spot in the cabin, as there is a limit on the number of pets allowed per flight. The fee for bringing her is fifty pounds, and it remains the same regardless of when you book, as long as it's within the required timeframe. As for documentation, you should have a health certificate from your vet confirming Luna is fit to travel, and ensure she meets any entry requirements for pets in the Netherlands.",
+          "timestamp": "5"
+        },
+        {
+          "role": "user",
+          "content": "Perfect, thank you so much",
+          "timestamp": "6"
+        }
+      ],
+      "evaluation": {
+        "scores": {
+          "understanding": 6,
+          "api_correctness": 5,
+          "outcome_confirmation": 7,
+          "naturalness": 8
+        },
+        "average": 6.5,
+        "overall_pass": false,
+        "summary": "Agent understood the request but failed to complete the booking and confirm the reference.",
+        "failures": [
+          {
+            "criterion": "understanding",
+            "score": 6,
+            "root_cause": "prompt",
+            "detail": "Agent did not call search_flights after getting destination",
+            "quotes": [
+              "Agent asked for destination twice without searching"
+            ]
+          },
+          {
+            "criterion": "api_correctness",
+            "score": 5,
+            "root_cause": "code",
+            "detail": "book_flight tool was not called",
+            "quotes": [
+              "No booking was made despite customer agreeing to proceed"
+            ]
+          },
+          {
+            "criterion": "outcome_confirmation",
+            "score": 7,
+            "root_cause": "prompt",
+            "detail": "Agent ended call without confirming booking reference",
+            "quotes": [
+              "Booking reference was never provided to the customer"
+            ]
+          }
+        ]
+      },
+      "changes": {
+        "prompt_changed": false,
+        "prompt_diff": "",
+        "code_patches": [
+          {
+            "file": "api/routes/webhooks.py",
+            "function": "webhook_search_flights",
+            "success": false,
+            "reason": "Tests failed after patch \u2014 rolled back to backup",
+            "diff": ""
+          }
+        ]
+      }
+    },
+    {
+      "iteration": 4,
+      "scenario_id": "reschedule_booking",
+      "transcript": [
+        {
+          "role": "user",
+          "content": "Hi, I'm trying to make a change to my existing booking, can you please help me find it and see if we have any availability on a different date? My reference number is BK-TEST01, but if that's not found, could you search for flights by name and then let me know what options are available?",
+          "timestamp": "1"
+        },
+        {
+          "role": "agent",
+          "content": "Thank you for calling Sky Airways customer service. My name is Sky, and I'm here to help you today. How can I assist you?",
+          "timestamp": "1"
+        },
+        {
+          "role": "user",
+          "content": "Hi Sky, my name is Emily Wilson, and I have a booking with your airline from Dublin to Paris, but unfortunately, something's come up and I was wondering if it would be possible to change my flight for two days later - can you help me with that?",
+          "timestamp": "2"
+        },
+        {
+          "role": "agent",
+          "content": "Hello Emily, I can certainly help you with that. First, I will try to retrieve your booking using the reference number BK-TEST01. After that, I will look for flights from Dublin to Paris two days later and present you with the available options.",
+          "timestamp": "2"
+        },
+        {
+          "role": "user",
+          "content": "That sounds great, thank you Sky. Just to confirm, if my reference isn't found, can you please try searching by flight name instead of just booking number, so I don't miss any potential flights? And also, what dates are we looking at for the alternative flights - would it be possible to change my original date or do you have availability two days later?",
+          "timestamp": "3"
+        },
+        {
+          "role": "agent",
+          "content": "Hello Emily, I understand you'd like me to search for flights by name if your booking reference isn't found. However, I can only search for flights by destination and date, not by flight name.\n\nFirst, let's try to find your booking using the reference number BK-TEST01. If that doesn't work, I'll need your original flight's destination and date to look for alternative flights two days later.",
+          "timestamp": "3"
+        },
+        {
+          "role": "user",
+          "content": "I understand about the search limitations, thank you Sky. For my booking, let me repeat it - the reference number is BK-TEST01, and my name is Emily Wilson, but if that's not found, could I please provide you with the actual flight numbers or dates of my original Dublin to Paris flight?",
+          "timestamp": "4"
+        },
+        {
+          "role": "agent",
+          "content": "Thank you, Emily. I will first try to retrieve your booking using the reference number BK-TEST01. If that doesn't work, I will let you know, and then you can provide the original flight numbers or dates for your Dublin to Paris flight.\n",
+          "timestamp": "4"
+        },
+        {
+          "role": "user",
+          "content": "That's okay, Sky. Just a reminder, my original booking is from Dublin Airport to Charles de Gaulle Airport on [insert actual dates], but if that doesn't show up in the system, could I please confirm when you find out it's not there, so we can move forward with looking at alternative flights?",
+          "timestamp": "5"
+        },
+        {
+          "role": "agent",
+          "content": "I was unable to find a booking with the reference number BK-TEST01. Could you please tell me the original date of your flight from Dublin to Paris? Once I have that, I can search for flights two days later for you.",
+          "timestamp": "5"
+        },
+        {
+          "role": "user",
+          "content": "I see, okay. The original flight was supposed to be on the 10th of this month, but it's actually the 12th of this month. Could you please go ahead and look for flights from Dublin to Paris two days later than that, so I can change my plans?",
+          "timestamp": "6"
+        },
+        {
+          "role": "agent",
+          "content": "Thank you for clarifying, Emily. Since I don't have the current date, I will assume you mean the 14th of the current month for your new flight.\n\nI will now search for flights from Dublin to Paris on the 14th of this month. What seat class would you prefer for the new flight, such as economy, business, or first class?",
+          "timestamp": "6"
+        },
+        {
+          "role": "user",
+          "content": "That sounds right, thank you Sky. I think I'll stick with economy for the new flight, it's fine by me, whatever is available. Can you please let me know what options are available on the 14th of this month from Dublin to Paris in economy class?",
+          "timestamp": "7"
+        },
+        {
+          "role": "agent",
+          "content": "Certainly, Emily. I will look for economy class flights from Dublin to Paris on the fourteenth of this month.",
+          "timestamp": "7"
+        },
+        {
+          "role": "user",
+          "content": "I think we're good here, Sky. Thank you so much for your help in rearranging my flight. Perfect, thank you so much!",
+          "timestamp": "8"
+        }
+      ],
+      "evaluation": {
+        "scores": {
+          "understanding": 6,
+          "api_correctness": 3,
+          "outcome_confirmation": 5,
+          "naturalness": 8
+        },
+        "average": 5.5,
+        "overall_pass": false,
+        "summary": "Agent understood the request but failed to complete the booking and confirm the reference.",
+        "failures": [
+          {
+            "criterion": "understanding",
+            "score": 6,
+            "root_cause": "prompt",
+            "detail": "Agent did not call search_flights after getting destination",
+            "quotes": [
+              "Agent asked for destination twice without searching"
+            ]
+          },
+          {
+            "criterion": "api_correctness",
+            "score": 3,
+            "root_cause": "code",
+            "detail": "book_flight tool was not called",
+            "quotes": [
+              "No booking was made despite customer agreeing to proceed"
+            ]
+          },
+          {
+            "criterion": "outcome_confirmation",
+            "score": 5,
+            "root_cause": "prompt",
+            "detail": "Agent ended call without confirming booking reference",
+            "quotes": [
+              "Booking reference was never provided to the customer"
+            ]
+          }
+        ]
+      },
+      "changes": {
+        "prompt_changed": false,
+        "prompt_diff": "",
+        "code_patches": [
+          {
+            "file": "api/routes/webhooks.py",
+            "function": "webhook_search_flights",
+            "success": true,
+            "reason": "Patch applied and verified. Backup at webhooks.py_20260515T225556",
+            "diff": ""
+          }
+        ]
+      }
+    },
+    {
+      "iteration": 5,
+      "scenario_id": "baggage_enquiry",
+      "transcript": [
+        {
+          "role": "user",
+          "content": "Hi, I'm calling because I have a flight to Rome with Sky Airways coming up and I wanted to clarify their baggage policy on economy tickets.",
+          "timestamp": "1"
+        },
+        {
+          "role": "agent",
+          "content": "Thank you for calling Sky Airways customer service. My name is Sky, and I'm here to help you today. How can I assist you?",
+          "timestamp": "1"
+        },
+        {
+          "role": "user",
+          "content": "I'd like to bring a small carry-on bag with me on the flight, but I also have some clothes that I bought recently and I was wondering if I could check those in as well. Can you tell me what's allowed in the cabin and if there are any restrictions for checked bags with an economy ticket?",
+          "timestamp": "2"
+        },
+        {
+          "role": "agent",
+          "content": "...",
+          "timestamp": "2"
+        },
+        {
+          "role": "user",
+          "content": "I'd also like to know, is hold baggage included in the cost of my economy ticket or is it an additional charge? I want to make sure I understand what I'll be charged for any checked bags I might need.",
+          "timestamp": "3"
+        },
+        {
+          "role": "agent",
+          "content": "Certainly, I can help you with that. You're asking about the baggage allowance for economy tickets, both for carry-on and checked bags.\n",
+          "timestamp": "3"
+        },
+        {
+          "role": "user",
+          "content": "Great, thank you Sky. I'm planning to bring a small bag that's under 40 litres and a few pieces of clothing that weigh around 20 kilograms total. Is there a weight limit for checked bags on economy flights, and if so, how much does it cost to check an extra bag?",
+          "timestamp": "4"
+        },
+        {
+          "role": "agent",
+          "content": "I can certainly help you with that. Let me look up the baggage allowance policy for economy tickets.\n",
+          "timestamp": "4"
+        },
+        {
+          "role": "user",
+          "content": "That would be great, thank you Sky. I just want to make sure I'm aware of all the costs involved so I don't get any surprises at check-in or when I land in Rome. My name is Emily, by the way, and I'm looking forward to my trip.",
+          "timestamp": "5"
+        },
+        {
+          "role": "agent",
+          "content": "Hello Emily, it's a pleasure to assist you.\n\nFor economy tickets, hold baggage is not included, so you would need to purchase it separately. The cost for an extra checked bag is thirty-five pounds. The standard weight limit for a checked bag is twenty-three kilograms. If your bag weighs between twenty-three and thirty-two kilograms, there will be an additional overweight fee of twenty-five pounds.",
+          "timestamp": "5"
+        },
+        {
+          "role": "user",
+          "content": "That sounds a bit confusing to me - can you explain it again or maybe provide some examples so I understand how it all works? For example, if my bag is 25kg and I also check another one that's 20kg, how much would that cost? And is there any way to add more than one extra bag for a lower rate?",
+          "timestamp": "6"
+        },
+        {
+          "role": "agent",
+          "content": "Certainly, Emily, I can clarify that for you with an example.\n\nFor economy tickets, hold baggage is not included, so any checked bags will incur a fee. Each extra bag up to twenty-three kilograms costs thirty-five pounds. If a bag weighs between twenty-three and thirty-two kilograms, there's an additional overweight fee of twenty-five pounds on top of the thirty-five pounds for the bag itself. Bags over thirty-two kilograms are not accepted.\n\nSo, for your example:\n   Your first bag, weighing twenty-five kilograms, would cost thirty-five pounds for the extra bag, plus an additional twenty-five pounds for being overweight, totaling sixty pounds.\n   Your second bag, weighing twenty kilograms, would cost thirty-five pounds as an extra bag, as it's within the standard weight limit.\n   The total cost for both bags would be ninety-five pounds.\n\nCurrently, there isn't a lower rate for adding multiple extra bags; the fees apply per bag as described.",
+          "timestamp": "6"
+        },
+        {
+          "role": "user",
+          "content": "That makes more sense now, thank you Sky. I just want to confirm that if my first bag is 25kg and my second bag is within the limit at 20kg, I'd pay \u00a395 for both of them plus any additional fees if they're checked in separately? And are there any fees for printing or checking online baggage labels before the flight?",
+          "timestamp": "7"
+        },
+        {
+          "role": "agent",
+          "content": "Based on the baggage policy, if your first bag is twenty-five kilograms, it would be considered an extra bag costing thirty-five pounds, plus an additional twenty-five pounds for being overweight (between twenty-three and thirty-two kilograms). Your second bag, weighing twenty kilograms, would be another extra bag costing thirty-five pounds. So, the total for both bags would indeed be ninety-five pounds.\n\nThe fees are applied per bag, so whether they are checked in separately or together, the total cost would remain the same. Regarding fees for printing or checking online baggage labels before your flight, there are no additional charges for that service.",
+          "timestamp": "7"
+        },
+        {
+          "role": "user",
+          "content": "That's good to know, thank you Sky. I think I've got it now. Just to confirm, if I end up checking both bags and they fall within the standard 23kg limit, I'll pay a total of \u00a395 for them, plus any additional fees if they're overweight? Is that correct?",
+          "timestamp": "8"
+        },
+        {
+          "role": "agent",
+          "content": "Thank you for clarifying, Emily.\n\nIf you check in two bags, and both of them are within the standard twenty-three kilogram limit, the cost would be thirty-five pounds per bag, totaling seventy pounds. The ninety-five pounds figure would apply if one of your bags was between twenty-three and thirty-two kilograms, incurring an additional twenty-five pound overweight fee for that specific bag.\n\nSo, to confirm, if both bags are under twenty-three kilograms, the total cost would be seventy pounds. If any bag exceeds twenty-three kilograms but is under thirty-two kilograms, an additional twenty-five pound fee will be applied to that specific bag.",
+          "timestamp": "8"
+        },
+        {
+          "role": "user",
+          "content": "I think I've got it now, thank you Sky. I'm feeling a bit more confident about my baggage situation for Rome. Perfect, thank you so much!",
+          "timestamp": "9"
+        }
+      ],
+      "evaluation": {
+        "scores": {
+          "understanding": 7,
+          "api_correctness": 5,
+          "outcome_confirmation": 6,
+          "naturalness": 8
+        },
+        "average": 6.5,
+        "overall_pass": false,
+        "summary": "Agent understood the request but failed to complete the booking and confirm the reference.",
+        "failures": [
+          {
+            "criterion": "understanding",
+            "score": 7,
+            "root_cause": "prompt",
+            "detail": "Agent did not call search_flights after getting destination",
+            "quotes": [
+              "Agent asked for destination twice without searching"
+            ]
+          },
+          {
+            "criterion": "api_correctness",
+            "score": 5,
+            "root_cause": "code",
+            "detail": "book_flight tool was not called",
+            "quotes": [
+              "No booking was made despite customer agreeing to proceed"
+            ]
+          },
+          {
+            "criterion": "outcome_confirmation",
+            "score": 6,
+            "root_cause": "prompt",
+            "detail": "Agent ended call without confirming booking reference",
+            "quotes": [
+              "Booking reference was never provided to the customer"
+            ]
+          }
+        ]
+      },
+      "changes": {
+        "prompt_changed": false,
+        "prompt_diff": "",
+        "code_patches": [
+          {
+            "file": "api/routes/webhooks.py",
+            "function": "webhook_search_flights",
+            "success": false,
+            "reason": "Tests failed after patch \u2014 rolled back to backup",
+            "diff": ""
+          }
+        ]
+      }
+    }
+  ],
+  "performance_summary": {
+    "first_iteration_average": 5.25,
+    "final_iteration_average": 6.5,
+    "improvement": 1.25,
+    "total_iterations": 5
+  }
+}
