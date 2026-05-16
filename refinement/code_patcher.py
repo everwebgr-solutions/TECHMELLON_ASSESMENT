@@ -28,13 +28,14 @@ _PATCHER_SYSTEM = """\
 You are an expert Python engineer fixing a specific bug in an airline API service.
 
 Rules:
-1. You will receive the CURRENT source code of a single Python function
+1. You will receive the CURRENT source code of a single Python function (shown with its decorators for context)
 2. You will receive a description of what it does wrong and what it should do
-3. Output ONLY the replacement function — complete, syntactically valid Python
+3. Output ONLY the replacement function body — complete, syntactically valid Python
 4. Keep the same function signature (name, parameters, return type)
 5. Do not add imports that don't already exist in the file
-6. Do not output anything outside the function definition (no explanation, no markdown)
-7. The function must start with 'def ' or 'async def '
+6. Do not output anything outside the function definition (no explanation, no markdown, no code fences)
+7. CRITICAL: Do NOT include decorators (@...) in your output. Decorators are already in the file and \
+will be duplicated if you include them. Your output MUST start with 'def ' or 'async def ' — nothing else before it.
 """
 
 
@@ -142,6 +143,21 @@ def _only_touches_target_function(new_function_code: str, function_name: str) ->
     return top_level_fns[0].name == function_name
 
 
+def _strip_decorators(fn_code: str) -> str:
+    """Remove decorator lines from LLM output that should start at 'def'."""
+    try:
+        tree = ast.parse(fn_code)
+    except SyntaxError:
+        return fn_code
+
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            lines = fn_code.splitlines()
+            return "\n".join(lines[node.lineno - 1:])
+
+    return fn_code
+
+
 def _run_tests() -> bool:
     """Run the test suite. Returns True if all tests pass."""
     result = subprocess.run(
@@ -207,6 +223,12 @@ def generate_and_apply_patch(request: PatchRequest) -> PatchResult:
         ),
     ]
 
+    from llm.ollama_provider import _dbg
+    _dbg(
+        f"CODE PATCHER INPUT → {request.file_path}::{request.function_name}",
+        f"FAILURE: {request.failure_description}\n\nEXPECTED: {request.expected_behavior}\n\nCURRENT FUNCTION:\n{current_fn_source}",
+    )
+
     try:
         new_fn_code = with_retry(patcher_llm.complete, messages, temperature=0.2, max_attempts=3)
     except Exception as exc:
@@ -222,13 +244,26 @@ def generate_and_apply_patch(request: PatchRequest) -> PatchResult:
             line for line in lines if not line.startswith("```")
         ).strip()
 
+    # Strip decorators if model included them despite being told not to
+    new_fn_code = _strip_decorators(new_fn_code)
+
+    _dbg(
+        f"CODE PATCHER LLM OUTPUT (after cleanup) → {request.function_name}",
+        new_fn_code,
+    )
+
     # Gate 3: syntax check
     if not _syntax_valid(new_fn_code):
+        try:
+            compile(new_fn_code, "<patch>", "exec")
+        except SyntaxError as se:
+            _dbg("CODE PATCHER GATE FAIL: syntax", f"{se}\n\nCode was:\n{new_fn_code}")
         return PatchResult(False, request.file_path, request.function_name,
                            "Patch failed syntax check")
 
     # Gate 4: scope check
     if not _only_touches_target_function(new_fn_code, request.function_name):
+        _dbg("CODE PATCHER GATE FAIL: scope", f"Expected only '{request.function_name}', got:\n{new_fn_code}")
         return PatchResult(False, request.file_path, request.function_name,
                            "Patch scope check failed — output contained unexpected function definitions")
 
@@ -253,10 +288,21 @@ def generate_and_apply_patch(request: PatchRequest) -> PatchResult:
         lineterm="",
     ))
 
+    if not file_diff:
+        # LLM returned identical code — nothing to apply.
+        _dbg("CODE PATCHER SKIPPED — no-op patch (LLM returned identical code)", new_fn_code[:300])
+        return PatchResult(False, request.file_path, request.function_name,
+                           "Patch was a no-op — LLM returned identical code, likely a prompt misclassification")
+
     file_path.write_text(patched_source)
 
     # Gate 5: run tests
-    if not _run_tests():
+    tests_passed = _run_tests()
+    _dbg(
+        f"CODE PATCHER TEST GATE → {'PASS' if tests_passed else 'FAIL'}",
+        f"Diff applied:\n{file_diff}",
+    )
+    if not tests_passed:
         _restore_backup(backup_path, file_path)
         return PatchResult(False, request.file_path, request.function_name,
                            "Tests failed after patch — rolled back to backup",
@@ -293,6 +339,27 @@ def _reload_module(file_path: str) -> None:
             pass  # Reload is best-effort; uvicorn --reload handles the rest
 
 
+# Exhaustive map of every function the code patcher is allowed to touch.
+# If the evaluator names a function not in this map, it has hallucinated a
+# name (e.g. "get_booking" instead of "webhook_get_booking") and we must
+# skip the patch rather than targeting a function that doesn't exist.
+_PATCHABLE_FUNCTIONS: dict = {
+    "api/routes/webhooks.py": {
+        "webhook_search_flights",
+        "webhook_book_flight",
+        "webhook_get_booking",
+        "webhook_cancel_booking",
+        "webhook_reschedule_booking",
+        "webhook_add_extras",
+        "webhook_query_knowledge",
+    },
+    "api/services/flight_service.py": {
+        "search_flights",
+        "get_flight_by_number",
+    },
+}
+
+
 def build_patch_requests_from_failures(
     failures: List[CriterionScore],
 ) -> List[PatchRequest]:
@@ -311,11 +378,36 @@ def build_patch_requests_from_failures(
         detail = failure.root_cause_detail
         file_path, function_name = _parse_file_function(detail)
 
+        # Validate that the evaluator named a real, patchable function.
+        # Local LLMs routinely output ElevenLabs tool names (e.g. "get_booking",
+        # "query_knowledge") instead of the actual webhook handler names
+        # ("webhook_get_booking", "webhook_query_knowledge"). Those functions
+        # don't exist in the source file — attempting to patch them always fails.
+        allowed = _PATCHABLE_FUNCTIONS.get(file_path, set())
+        if function_name not in allowed:
+            from llm.ollama_provider import _dbg
+            _dbg(
+                "CODE PATCHER SKIPPED — function not in allowed list",
+                f"Evaluator named '{file_path}::{function_name}'\n"
+                f"Allowed for this file: {sorted(allowed)}\n"
+                f"Detail: {detail}",
+            )
+            continue
+
+        # Build a concrete expected_behavior from the failure score and quotes
+        quotes = " | ".join(f'"{q}"' for q in failure.failure_quotes) if failure.failure_quotes else ""
+        expected = (
+            f"The function should execute correctly so the agent can score 9-10 on this criterion. "
+            f"Current failure (score {failure.score}/10): {detail}"
+        )
+        if quotes:
+            expected += f" Evidence from transcript: {quotes}"
+
         requests.append(PatchRequest(
             file_path=file_path,
             function_name=function_name,
             failure_description=detail,
-            expected_behavior=f"Fix the issue: {detail}",
+            expected_behavior=expected,
         ))
 
     return requests
