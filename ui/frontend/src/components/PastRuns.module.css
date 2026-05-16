@@ -1,5 +1,5 @@
 /* ── Shell ── */
-.layout { display: flex; height: 100%; overflow: hidden; }
+.layout { display: flex; flex: 1; align-self: stretch; overflow: hidden; }
 
 /* ── Sidebar ── */
 .sidebar {
@@ -35,7 +35,7 @@
 .maxIter     { background: rgba(245,158,11,.12); color: var(--yellow); border: 1px solid rgba(245,158,11,.25); }
 
 /* ── Detail ── */
-.detail { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+.detail { flex: 1; align-self: stretch; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
 
 .detailEmpty {
   flex: 1; display: flex; align-items: center; justify-content: center;

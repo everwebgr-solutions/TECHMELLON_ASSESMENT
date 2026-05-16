@@ -10,7 +10,7 @@ import { useEventStream } from './hooks/useEventStream'
 import styles from './App.module.css'
 
 function makeIter(n, scenarioId, scenarioDescription) {
-  return { iteration: n, scenarioId, scenarioDescription, turns: [], scores: null, average: null, pass: null, summary: '', diffs: [], patches: [] }
+  return { iteration: n, scenarioId, scenarioDescription, turns: [], scores: null, average: null, pass: null, summary: '', toolCalls: [], diffs: [], patches: [] }
 }
 
 export default function App() {
@@ -33,6 +33,11 @@ export default function App() {
 
   const handleEvent = useCallback((event) => {
     const { type } = event
+
+    if (type === 'initializing') {
+      setLoopRunning(true)
+      setActivity('initializing')
+    }
 
     if (type === 'loop_started') {
       setLoopRunning(true)
@@ -81,7 +86,7 @@ export default function App() {
       setActivity('fixing')
       setIterations(prev => prev.map(it =>
         it.iteration === n
-          ? { ...it, scores: event.scores, average: event.average, pass: event.overall_pass, summary: event.summary }
+          ? { ...it, scores: event.scores, average: event.average, pass: event.overall_pass, summary: event.summary, toolCalls: event.tool_calls || [] }
           : it
       ))
     }
@@ -197,6 +202,7 @@ export default function App() {
                   average={currentIter?.average}
                   pass={currentIter?.pass}
                   summary={currentIter?.summary}
+                  toolCalls={currentIter?.toolCalls}
                   activity={activity}
                 />
               </div>

@@ -1,9 +1,10 @@
 import styles from './PipelineBar.module.css'
 
 const STEPS = [
-  { key: 'simulating', label: 'Conversation' },
-  { key: 'evaluating', label: 'Evaluation'   },
-  { key: 'fixing',     label: 'Changes'      },
+  { key: 'initializing', label: 'Setup'        },
+  { key: 'simulating',   label: 'Conversation' },
+  { key: 'evaluating',   label: 'Evaluation'   },
+  { key: 'fixing',       label: 'Changes'      },
 ]
 
 const ORDER = STEPS.map(s => s.key)

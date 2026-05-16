@@ -10,7 +10,7 @@ const CRITERIA = [
 function cls(v) { return v >= 8 ? 'pass' : v >= 6 ? 'warn' : 'fail' }
 function color(v) { return v >= 8 ? 'var(--green)' : v >= 6 ? 'var(--yellow)' : 'var(--red)' }
 
-export function ScorePanel({ iteration, scores, average, pass, summary, activity }) {
+export function ScorePanel({ iteration, scores, average, pass, summary, toolCalls, activity }) {
   if (!scores) {
     if (activity === 'evaluating') {
       return (
@@ -27,8 +27,6 @@ export function ScorePanel({ iteration, scores, average, pass, summary, activity
       </div>
     )
   }
-
-  const ac = cls(average)
 
   return (
     <div>
@@ -59,6 +57,16 @@ export function ScorePanel({ iteration, scores, average, pass, summary, activity
               <div className={styles.barWrap}>
                 <div className={`${styles.bar} ${styles[c]}`} style={{ width: `${v * 10}%` }} />
               </div>
+              {key === 'api_correctness' && toolCalls && toolCalls.length > 0 && (
+                <div className={styles.toolCallList}>
+                  {toolCalls.map((tc, i) => (
+                    <div key={i} className={`${styles.toolCallRow} ${tc.error ? styles.tcFail : styles.tcPass}`}>
+                      <span className={styles.tcName}>{tc.tool}</span>
+                      <span className={styles.tcStatus}>{tc.error ? '✗' : '✓'}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )
         })}
