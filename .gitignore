@@ -23,6 +23,9 @@ data/airline.db
 data/airline.db-shm
 data/airline.db-wal
 
+# Code patcher backups (runtime artefacts, not source)
+data/patches/backup/
+
 # IDE
 .vscode/
 .idea/
