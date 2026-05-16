@@ -170,6 +170,10 @@ def webhook_book_flight(req: BookFlightRequest, db: Session = Depends(get_db)):
             "seat_preference": booking.seat_preference,
             "total_price_gbp": booking.total_price_gbp,
             "status": booking.status,
+            "message": (
+                f"Booking confirmed. You MUST read the booking reference to the customer: {booking.reference}. "
+                "They will need this reference for any future changes, cancellations, or extras."
+            ),
         })
         _log_call("book_flight", inputs, {"success": True, "reference": booking.reference})
         return result
