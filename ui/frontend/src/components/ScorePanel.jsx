@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import styles from './ScorePanel.module.css'
 
 const CRITERIA = [
@@ -10,7 +11,11 @@ const CRITERIA = [
 function cls(v) { return v >= 8 ? 'pass' : v >= 6 ? 'warn' : 'fail' }
 function color(v) { return v >= 8 ? 'var(--green)' : v >= 6 ? 'var(--yellow)' : 'var(--red)' }
 
-export function ScorePanel({ iteration, scores, average, pass, summary, toolCalls, activity }) {
+const TYPE_LABELS = { booking: 'Booking', inquiry: 'Inquiry', modification: 'Modification' }
+const TYPE_COLORS = { booking: 'var(--accent)', inquiry: 'var(--yellow)', modification: 'var(--green)' }
+
+export function ScorePanel({ iteration, scores, average, pass, summary, toolCalls, conversationType, activity }) {
+  const [toolCallsOpen, setToolCallsOpen] = useState(false)
   if (!scores) {
     if (activity === 'evaluating') {
       return (
@@ -49,15 +54,24 @@ export function ScorePanel({ iteration, scores, average, pass, summary, toolCall
           const v = scores[key] ?? 0
           const c = cls(v)
           return (
-            <div key={key} className={styles.scoreCard}>
-              <div className={styles.scoreLabel}>{label}</div>
+            <div
+              key={key}
+              className={`${styles.scoreCard} ${key === 'api_correctness' && toolCalls?.length ? styles.clickable : ''}`}
+              onClick={key === 'api_correctness' && toolCalls?.length ? () => setToolCallsOpen(o => !o) : undefined}
+            >
+              <div className={styles.scoreLabel}>
+                {label}
+                {key === 'api_correctness' && toolCalls?.length > 0 && (
+                  <span className={styles.toolCallsToggle}>{toolCallsOpen ? '▾' : '▸'} {toolCalls.length} call{toolCalls.length !== 1 ? 's' : ''}</span>
+                )}
+              </div>
               <div className={styles.scoreValue} style={{ color: color(v) }}>
                 {v}<span className={styles.denom}>/10</span>
               </div>
               <div className={styles.barWrap}>
                 <div className={`${styles.bar} ${styles[c]}`} style={{ width: `${v * 10}%` }} />
               </div>
-              {key === 'api_correctness' && toolCalls && toolCalls.length > 0 && (
+              {key === 'api_correctness' && toolCallsOpen && toolCalls?.length > 0 && (
                 <div className={styles.toolCallList}>
                   {toolCalls.map((tc, i) => (
                     <div key={i} className={`${styles.toolCallRow} ${tc.error ? styles.tcFail : styles.tcPass}`}>
@@ -71,6 +85,18 @@ export function ScorePanel({ iteration, scores, average, pass, summary, toolCall
           )
         })}
       </div>
+
+      {conversationType && (
+        <div className={styles.classification}>
+          <span className={styles.classLabel}>Classification</span>
+          <span
+            className={styles.classType}
+            style={{ color: TYPE_COLORS[conversationType] ?? 'var(--text2)', borderColor: TYPE_COLORS[conversationType] ?? 'var(--border)' }}
+          >
+            {TYPE_LABELS[conversationType] ?? conversationType}
+          </span>
+        </div>
+      )}
 
       {summary && <div className={styles.summary}>{summary}</div>}
 

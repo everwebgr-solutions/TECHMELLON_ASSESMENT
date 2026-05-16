@@ -10,7 +10,7 @@ import { useEventStream } from './hooks/useEventStream'
 import styles from './App.module.css'
 
 function makeIter(n, scenarioId, scenarioDescription) {
-  return { iteration: n, scenarioId, scenarioDescription, turns: [], scores: null, average: null, pass: null, summary: '', toolCalls: [], diffs: [], patches: [] }
+  return { iteration: n, scenarioId, scenarioDescription, turns: [], scores: null, average: null, pass: null, summary: '', toolCalls: [], conversationType: null, diffs: [], patches: [] }
 }
 
 export default function App() {
@@ -53,6 +53,13 @@ export default function App() {
       setHistoryCount(c => c + 1)
     }
 
+    if (type === 'error') {
+      // If no iteration has started yet the error happened during setup —
+      // reset so the button is usable again and the pipeline bar unlocks.
+      setLoopRunning(false)
+      setActivity(null)
+    }
+
     if (type === 'iteration_started') {
       const n = event.iteration
       setActivity('simulating')
@@ -86,7 +93,7 @@ export default function App() {
       setActivity('fixing')
       setIterations(prev => prev.map(it =>
         it.iteration === n
-          ? { ...it, scores: event.scores, average: event.average, pass: event.overall_pass, summary: event.summary, toolCalls: event.tool_calls || [] }
+          ? { ...it, scores: event.scores, average: event.average, pass: event.overall_pass, summary: event.summary, toolCalls: event.tool_calls || [], conversationType: event.conversation_type || null }
           : it
       ))
     }
@@ -203,6 +210,7 @@ export default function App() {
                   pass={currentIter?.pass}
                   summary={currentIter?.summary}
                   toolCalls={currentIter?.toolCalls}
+                  conversationType={currentIter?.conversationType}
                   activity={activity}
                 />
               </div>
